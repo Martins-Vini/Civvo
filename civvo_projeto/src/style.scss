@@ -1,0 +1,16 @@
+@use './styles/reset' as reset;
+@use './styles/variables' as variables;
+
+body{
+    text-align: center;
+    padding:30px;
+    color:var(--corTexto);
+    background-color:var(--corFundo);
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+h1{
+    color:var(--corTitulo);
+    size:30px;
+    margin: 5px;
+}
