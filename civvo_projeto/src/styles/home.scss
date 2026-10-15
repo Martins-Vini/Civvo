@@ -1,0 +1,62 @@
+.home {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.titulo-principal {
+  font-size: 40px;
+  color: #2d67b3;
+  margin-right: 300px;
+}
+
+span {
+  color: #d6ebf2;
+}
+
+.login-alternativo {
+  font-size: 13px;
+}
+
+.login-alternativo a {
+  color: #0e3e56;
+}
+
+.entrar-btn {
+  display: inline-block;
+  border: none;
+  height: 40px;
+  width: 150px;
+  padding: 10px;
+  margin: 10px;
+  border-radius: 10px;
+  background-color: #c6e5f0;
+  font-size: 15px;
+  color: #2d67b3;
+  font-weight: bold;
+  font-family: inherit;
+  line-height: 20px;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+}
+
+.cadastrar-btn {
+  display: inline-block;
+  border: 2px solid #ffffff;
+  height: 40px;
+  width: 150px;
+  padding: 10px;
+  margin: 10px;
+  border-radius: 10px;
+  background-color: #76a6b7;
+  font-size: 15px;
+  color: #ffffff;
+  font-weight: bold;
+  font-family: inherit;
+  line-height: 16px;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+}

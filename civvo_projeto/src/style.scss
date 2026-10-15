@@ -1,16 +1,23 @@
-@use './styles/reset' as reset;
-@use './styles/variables' as variables;
+@use './styles/reset';
+@use './styles/variables';
+@use './styles/home';
+@use './styles/auth';
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
 
-body{
-    text-align: center;
-    padding:30px;
-    color:var(--corTexto);
-    background-color:var(--corFundo);
-    font-family: Arial, Helvetica, sans-serif;
+:root {
+  font-family: 'Poppins';
+  line-height: 1.5;
+  color: #1f2430;
+  background: #eef4ff;
 }
 
-h1{
-    color:var(--corTitulo);
-    size:30px;
-    margin: 5px;
+body {
+  min-height: 100vh;
+  padding: 24px;
+  color: var(--corTexto, #1f2430);
+  background: linear-gradient(135deg, #a8d5e5 0%, #6994a3 100%);
+}
+
+p {
+  font-size: 20px;
 }

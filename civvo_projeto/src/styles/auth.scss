@@ -1,0 +1,320 @@
+.topbar {
+  position: relative;
+  width: 100%;
+  height: 80px;
+}
+
+.back-link {
+  position: absolute;
+  left: 30px;
+  top: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  color: #1d2640;
+  text-decoration: none;
+  font-size: 1.6rem;
+  font-weight: 700;
+  box-shadow: 0 8px 18px rgba(29, 38, 64, 0.12);
+}
+
+.logo-civvo {
+  position: absolute;
+  right: 30px;
+  height: auto;
+}
+
+.auth-page {
+  width: min(100%, 460px);
+  margin: 0 auto;
+}
+
+.auth-card {
+  background: #ffffff;
+  border: 1px solid #e9edf7;
+  border-radius: 20px;
+  box-shadow: 0 18px 40px rgba(31, 36, 48, 0.08);
+  padding: 32px 28px;
+}
+
+.auth-role {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: #3a4054;
+  margin-bottom: 12px;
+}
+
+.titulo-auth {
+    color: #0E3E56;
+}
+
+.auth-card h1 {
+  font-size: clamp(1.8rem, 3vw, 2.3rem);
+  margin-bottom: 8px;
+}
+
+.auth-subtitle {
+  margin-bottom: 24px;
+  color: #000;
+}
+
+.span-auth {
+    font-weight: bold;
+    color: #000;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  font-weight: 600;
+  color: #000;
+}
+
+.auth-field input {
+  border: 1px solid #dfe5f1;
+  border-radius: 12px;
+  background: #f9faff;
+  padding: 12px 14px;
+  font-size: 1rem;
+  color: #1f2430;
+}
+
+.auth-field input:focus {
+  outline: 2px solid rgba(91, 107, 255, 0.18);
+  border-color: #5b6bff;
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrapper input {
+  width: 100%;
+  padding-right: 82px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  border: 0;
+  background: transparent;
+  color: #38677F;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.password-toggle:focus-visible {
+  outline: 2px solid #5b6bff;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.password-strength {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.password-strength-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5e9f2;
+}
+
+.password-strength-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 180ms ease, background-color 180ms ease;
+}
+
+.password-strength[data-strength="weak"] .password-strength-fill {
+  width: 33%;
+  background: #d64545;
+}
+
+.password-strength[data-strength="medium"] .password-strength-fill {
+  width: 66%;
+  background: #d99a24;
+}
+
+.password-strength[data-strength="strong"] .password-strength-fill {
+  width: 100%;
+  background: #21845b;
+}
+
+.password-strength-text {
+  text-align: left;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #586079;
+}
+
+.password-strength[data-strength="weak"] .password-strength-text {
+  color: #a82a2a;
+}
+
+.password-strength[data-strength="strong"] .password-strength-text {
+  color: #137048;
+}
+
+.forgot-password {
+    text-align: end;
+    color: #38677F;
+}
+
+.auth-button {
+  margin-top: 8px;
+  border: none;
+  border-radius: 12px;
+  background: #38677F;
+  color: #fff;
+  padding: 14px 18px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.verification-icon {
+  display: block;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  color: #38677f;
+}
+
+.verification-card {
+  text-align: center;
+}
+
+.verification-card h1 {
+  color: #0e3e56;
+}
+
+.verification-card p {
+  color: #3a4054;
+}
+
+.verification-back {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+}
+
+.verification-note {
+  margin-top: 14px;
+  font-size: 0.9rem;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 4px 0;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid #dfe5f1;
+}
+
+.divider span {
+  padding: 0 12px;
+  color: #586079;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.google-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid #dadce0;
+  border-radius: 12px;
+  background: #fff;
+  color: #3c4043;
+  padding: 12px 16px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.18);
+}
+
+.google-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+form p {
+    font-size: 15px;
+    color: #000;
+    text-align: center;
+}
+
+.auth-switch {
+  margin-top: 18px;
+  text-align: center;
+  color: #fff;
+}
+
+.auth-switch a {
+  color: #0E3E56;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.auth-status {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #eafaf1;
+  color: #137048;
+  font-size: 0.95rem;
+}
+
+.auth-status.error {
+  background: #fdeceb;
+  color: #a82a2a;
+}
+
+.auth-subtitle-ong {
+  color: #0E3E56;
+  font-size: 20px;
+}
+
+.auth-desciption {
+  color: #000;
+  font-size: 13px;
+  padding: 20px 0;
+}
