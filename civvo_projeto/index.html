@@ -9,6 +9,13 @@
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
+
+    <div id="area-logada" hidden>
+      <button class="skip" onclick="skipToMain()">Pular para o conteúdo</button>
+      <div id="anuncio" class="sr" aria-live="polite" aria-atomic="true"></div>
+      <div id="root"></div>
+    </div>
+
+    <script type="module" src="/src/bridge.js"></script>
   </body>
 </html>

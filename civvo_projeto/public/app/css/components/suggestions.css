@@ -1,0 +1,30 @@
+/* Coluna lateral de sugestões. */
+
+.sug {
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.sug h4 {
+  margin-bottom: 12px;
+}
+
+.sg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.sg > div:not(.av) {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.sg small {
+  display: block;
+  color: var(--mut);
+  font-weight: 400;
+}

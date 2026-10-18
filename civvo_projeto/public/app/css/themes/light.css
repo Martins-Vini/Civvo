@@ -1,0 +1,18 @@
+
+.t-claro {
+  --bg: #fff;
+  --card: #f6f6f6;
+  --ink: #000;
+  --mut: #5b5b5b;
+  --line: #e3e3e3;
+  --soft: #ececec;
+  --ink-g: #000;
+  --acc: var(--pri);
+}
+
+body.t-claro { background: #fff; }
+
+.t-claro .tag { background: #e6f1f6; color: #1f4a5e; }
+.t-claro .tag.warn { background: #fff3dc; color: #7a5200; }
+.t-claro .tag.bad { background: #fdeae6; color: #a8321f; }
+.t-claro .nav:hover, .t-claro .nav.on { background: var(--soft); color: var(--pri); }

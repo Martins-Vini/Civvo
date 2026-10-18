@@ -1,0 +1,111 @@
+/* Cartão de postagem do feed. */
+
+.post {
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+
+.ph {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.ph b {
+  display: block;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ph small {
+  color: var(--mut);
+}
+
+.pm {
+  aspect-ratio: 16/10;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: #fff;
+  padding: 24px;
+  font-size: clamp(20px,3vw,28px);
+  font-weight: 700;
+  text-shadow: 0 2px 12px rgba(0,0,0,.25);
+}
+
+.pb {
+  padding: 14px 16px;
+}
+
+.pb p {
+  color: var(--mut);
+  margin-bottom: 10px;
+}
+
+.pa {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px 16px;
+}
+
+.pa button {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--mut);
+  font-weight: 500;
+}
+
+.pa button.liked {
+  color: var(--bad);
+}
+
+.pa .btn {
+  margin-left: auto;
+}
+
+.pm small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 10px;
+  text-shadow: none;
+}
+
+.pimg {
+  width: 100%;
+  aspect-ratio: 16/10;
+  object-fit: cover;
+  display: block;
+}
+
+.pa button.liked svg { fill: currentColor; }
+
+.vol { margin-top: 10px; padding: 12px; border-radius: 8px; background: color-mix(in srgb, #b7e7ff 25%, #fff); }
+.vol p { margin: 4px 0 0; color: var(--ink); }
+
+.rpl { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin-top: 10px; border-radius: 8px; background: color-mix(in srgb, #b7e7ff 25%, #fff); font-size: 13px; }
+.rpl[hidden] { display: none; }
+.cmt.rep { border-left: 2px solid var(--line); padding-left: 10px; }
+.mg { display: grid; gap: 10px; margin-top: 12px; }
+
+.cmt { display: flex; gap: 10px; }
+.cmt .cmb { flex: 1; min-width: 0; }
+.cmt .av { margin-top: 2px; }
+
+/* os botões de ação do post mantêm a cor própria do .btn (o estilo genérico dos ícones deixava o texto apagado) */
+.pa button.btn { color: #fff; }
+.pa button.btn.light { color: var(--pri); }
+.pa button.btn.ghost { color: var(--pri); }
+
+/* o cabeçalho do post não quebra o nome da ONG: ele corta com reticências */
+.ph > div:not(.av) { flex: 1; min-width: 0; }
+.ph b, .ph small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 700px) {
+  .ph { flex-wrap: wrap; row-gap: 6px; }
+  .ph > div:not(.av) { flex: 1 1 130px; }
+  .ph .lk { margin-left: auto; }
+}

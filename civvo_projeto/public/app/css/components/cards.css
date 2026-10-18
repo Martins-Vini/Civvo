@@ -1,0 +1,43 @@
+/* Cards, tags de status e itens de grade. */
+
+.card {
+  background: var(--card);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+
+.tag {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: #e3f7ec;
+  color: #17623f;
+  font-weight: 600;
+}
+
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fill,minmax(150px,1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.gi {
+  padding: 16px;
+  text-align: center;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+
+a.gi:hover {
+  border-color: var(--pri);
+}
+
+.gi .av {
+  margin: 0 auto 8px;
+}
+
+.tag.warn { background: #fff3dc; color: #7a5200; }
+.tag.bad { background: #fdeae6; color: #a8321f; }
