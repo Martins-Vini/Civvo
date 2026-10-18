@@ -1,0 +1,51 @@
+
+.pmedia { cursor: zoom-in; }
+.pmedia:focus-visible { outline-offset: -3px; }
+
+.pv {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(10, 25, 35, .88);
+}
+
+.pvx { position: absolute; top: 12px; right: 16px; width: 40px; height: 40px; z-index: 2; color: #fff; font-size: 26px; }
+
+.pvc {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-rows: minmax(0, 1fr);
+  width: min(1180px, 100%);
+  height: min(88vh, 780px);
+  background: var(--card);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.pvm { position: relative; overflow: hidden; background: #000; min-height: 0; }
+.pvm > * { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pvm .car { height: 100%; }
+.pvm img { width: 100%; height: 100%; aspect-ratio: auto; object-fit: contain; }
+.pvm .pm { aspect-ratio: auto; }
+.pvm .cnt { right: auto; left: 12px; }
+
+.pvr { display: flex; flex-direction: column; min-height: 0; }
+.pvh { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.pvh > div:not(.av) { flex: 1; min-width: 0; }
+.pvh b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pvh small, .cap small { display: block; color: var(--mut); }
+.pvb { flex: 1; overflow-y: auto; padding: 12px 14px; }
+.cap { display: flex; gap: 10px; }
+.pvf { border-top: 1px solid var(--line); }
+.pvl { padding: 0 14px 8px; font-size: 13px; color: var(--mut); }
+.pvl b { color: var(--ink); }
+.pvf .cf { padding: 8px 14px 14px; border: 0; }
+
+@media (max-width: 760px) {
+  .pv { padding: 0; }
+  .pvc { grid-template-columns: 1fr; grid-template-rows: minmax(0, 40%) minmax(0, 1fr); width: 100%; height: 100%; border-radius: 0; }
+  .pvx { top: 6px; right: 8px; background: rgba(0, 0, 0, .45); border-radius: 50%; }
+}

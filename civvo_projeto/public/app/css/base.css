@@ -1,0 +1,57 @@
+/* Reset, tipografia base, foco visível e redução de movimento. */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html, body {
+  min-height: 100%;
+}
+
+body {
+  font-family: Poppins,system-ui,sans-serif;
+  background: linear-gradient(180deg,#b7e7ff 0%,#6995a4 100%) fixed;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+button, input, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+}
+
+a {
+  color: var(--pri);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+h1, h2, h3, h4 {
+  letter-spacing: -.015em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--pri);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none!important;
+    transition: none!important;
+  }
+}
+
+/* acessibilidade: texto só para leitores de tela, link "pular para o conteúdo" e foco programático sem contorno */
+.sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.skip { position: fixed; top: 8px; left: 8px; z-index: 100; padding: 10px 16px; border-radius: 8px; background: var(--pri); color: #fff; font-weight: 600; transform: translateY(-200%); }
+.skip:focus { transform: none; }
+h1:focus, #conteudo:focus { outline: none; }

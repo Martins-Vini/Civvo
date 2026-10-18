@@ -1,0 +1,25 @@
+/* Fluxo de doação e comprovante. */
+
+.amts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+
+.amt {
+  padding: 12px 0;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  font-weight: 600;
+  background: var(--card);
+}
+
+.amt.on { border-color: var(--pri); background: var(--pri); color: #fff; }
+
+.dcard { padding: 20px; margin-bottom: 16px; }
+.dn-err { color: var(--bad); font-size: 13px; margin: 10px 0; min-height: 18px; }
+
+.rc { padding: 24px; }
+.rc dl { display: grid; grid-template-columns: 130px 1fr; gap: 10px 16px; margin: 16px 0; }
+.rc dt { color: var(--mut); }
+.rc dd { margin: 0; font-weight: 500; }
+
+@media (max-width: 700px) {
+  .amts { grid-template-columns: repeat(2, 1fr); }
+}

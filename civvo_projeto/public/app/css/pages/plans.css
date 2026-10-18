@@ -1,0 +1,7 @@
+
+.plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.plan { padding: 20px; }
+.plan.on { border: 2px solid var(--pri); }
+.plan .pr { display: block; font-size: 20px; margin-top: 4px; }
+.plan ul { margin: 12px 0 16px 18px; padding: 0; }
+.plan li { margin: 6px 0; }

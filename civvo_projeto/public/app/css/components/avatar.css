@@ -1,0 +1,13 @@
+
+.av {
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+  flex: none;
+}
+
+img.av {
+  object-fit: cover;
+}
