@@ -1,0 +1,39 @@
+/* Carrossel de fotos do post. */
+
+.carw { position: relative; }
+.car { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.car::-webkit-scrollbar { display: none; }
+.car img { flex: none; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; scroll-snap-align: start; }
+
+.cb {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .9);
+  color: var(--pri);
+  font-size: 22px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.cb.prev { left: 10px; }
+.cb.next { right: 10px; }
+
+.dots { position: absolute; bottom: 10px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; }
+.dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, .55); }
+.dots i.on { background: #fff; }
+
+.cnt {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, .5);
+  color: #fff;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 99px;
+}

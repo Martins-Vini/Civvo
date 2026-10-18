@@ -1,0 +1,24 @@
+/* Telas de toque: alvos de pelo menos 44 x 44 px nos controles principais. */
+
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  .btn.sm { padding-left: 16px; padding-right: 16px; }
+  .bk { width: 44px; height: 44px; }
+  .lk { min-height: 44px; display: inline-flex; align-items: center; padding: 0 8px; }
+  .pa button { min-width: 44px; min-height: 44px; justify-content: center; }
+  .in { min-height: 44px; }
+  .seg button { min-height: 44px; padding: 0 14px; }
+  .chip, .amt { min-height: 44px; }
+  .tabs a { min-height: 44px; display: inline-flex; align-items: center; }
+  .qb { width: 36px; height: 36px; }
+  .cb { width: 44px; height: 44px; }
+  .th > button:first-child { min-width: 44px; min-height: 44px; }
+  .th .rm { width: 28px; height: 28px; top: -10px; right: -10px; font-size: 12px; }
+  .mx, .pvx, .sp, .sh { width: 44px; height: 44px; }
+  .tbar .tb-m { width: 44px; height: 44px; }
+  .tbar .tb-plus { width: 44px; height: 44px; }
+  .kcard button, .vl, .srow a { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  .bnav a { min-width: 44px; min-height: 44px; }
+  .nav { min-height: 44px; }
+  .rd { min-height: 44px; }
+}

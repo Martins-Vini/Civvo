@@ -1,0 +1,43 @@
+
+.stories {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 4px 2px 14px;
+  scrollbar-width: none;
+}
+
+.st {
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-g);
+  width: 68px;
+  flex: none;
+}
+
+.st .ring {
+  padding: 3px;
+  border-radius: 50%;
+  background: var(--pri);
+  margin-bottom: 5px;
+}
+
+.st .ring>div {
+  border: 3px solid var(--card);
+  border-radius: 50%;
+}
+
+.st {
+  color: var(--ink-g);
+}
+
+.st .ring.plus { display: grid; place-items: center; font-size: 26px; color: var(--pri); }
+
+.st .ring.e {
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  background: transparent;
+  border: 2px dashed var(--pri);
+  opacity: .55;
+}

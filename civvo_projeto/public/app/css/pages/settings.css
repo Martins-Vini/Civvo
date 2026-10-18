@@ -1,0 +1,26 @@
+/* Configurações: linhas de opção. */
+
+.set { padding: 20px; margin-bottom: 16px; }
+.set h4 { margin-bottom: 8px; }
+
+.srow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.srow small { display: block; color: var(--mut); }
+
+
+.pm2 { display: flex; justify-content: space-between; gap: 10px; padding-top: 6px; font-size: 13px; }
+
+.temas { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 8px; }
+.tema { text-align: left; padding: 12px; border: 2px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); }
+.tema.on { border-color: var(--acc); }
+.tema small { display: block; color: var(--mut); }
+.tema .prev { display: block; height: 54px; border-radius: 8px; border: 1px solid #8a8a8a; margin-bottom: 8px; }
+.tema .p-claro { background: linear-gradient(#fff 62%, #39677e 62%); }
+.tema .p-escuro { background: linear-gradient(#000 62%, #b7e7ff 62%); }

@@ -1,0 +1,67 @@
+
+.t-escuro {
+  --bg: #000;
+  --card: #121212;
+  --ink: #fff;
+  --mut: #a8a8a8;
+  --line: #2a2a2a;
+  --soft: #1e1e1e;
+  --ink-g: #fff;
+  --acc: #b7e7ff;
+  --pri: #b7e7ff; 
+  --pri2: #fff;
+  --bad: #ff7a7a;
+  --ok: #6fe0a6;
+}
+
+body.t-escuro { background: #000; }
+
+/* botões: o principal vira azul claro com texto preto; os secundários ficam escuros com texto azul */
+.t-escuro .btn { background: var(--acc); color: #000; }
+.t-escuro .btn:hover { background: #fff; }
+.t-escuro .btn.light { background: var(--soft); color: var(--acc); }
+.t-escuro .btn.light:hover { background: #2a2a2a; }
+.t-escuro .btn.ghost { background: transparent; color: var(--acc); border-color: var(--acc); }
+.t-escuro .pa button.btn { color: #000; }
+.t-escuro .pa button.btn.light, .t-escuro .pa button.btn.ghost { color: var(--acc); }
+
+/* etiquetas, progresso, selo e detalhes de cartão */
+.t-escuro .tag { background: #1b2a31; color: var(--acc); }
+.t-escuro .tag.warn { background: #2b2410; color: #f0c36a; }
+.t-escuro .tag.bad { background: #2d1614; color: #ff9a8f; }
+.t-escuro .bar b { background: var(--acc); }
+.t-escuro .vol, .t-escuro .rpl { background: #1a2329; }
+.t-escuro .vb circle { fill: var(--acc); }
+.t-escuro .vb path { stroke: #000; }
+.t-escuro .lk:hover { color: var(--acc); }
+.t-escuro .in:focus { border-color: var(--acc); box-shadow: 0 0 0 4px rgba(183, 231, 255, .2); }
+
+/* menu lateral, barra superior e barra inferior (celular) */
+.t-escuro .side { background: #000; border-right-color: var(--line); }
+.t-escuro .nav:hover, .t-escuro .nav.on { background: var(--soft); color: var(--acc); }
+.t-escuro .seg button.on { background: var(--acc); color: #000; }
+.t-escuro .tbar { background: rgba(0, 0, 0, .92); }
+.t-escuro .tbar .tb-m, .t-escuro .tbar .tb-plus { color: var(--ink); }
+.t-escuro .tbar .tb-plus { border-color: var(--ink); }
+.t-escuro .tbar .tb-m.on { background: var(--soft); }
+.t-escuro .bnav { background: #000; box-shadow: 0 -1px 0 var(--line); }
+.t-escuro .bnav a.on { background: var(--soft); color: var(--acc); }
+.t-escuro .bnav .bn-home { background: var(--acc); color: #000; border-color: #000; box-shadow: 0 6px 16px rgba(0, 0, 0, .6); }
+.t-escuro .bnav .bn-home.on { background: var(--acc); color: #000; box-shadow: 0 0 0 3px #fff, 0 6px 16px rgba(0, 0, 0, .6); }
+.t-escuro .bnav .bn-av.on .av { border-color: var(--acc); }
+
+/* Momentos e rodapé do feed */
+.t-escuro .st .ring { background: var(--acc); }
+.t-escuro .st .ring.e { background: transparent; border-color: var(--mut); }
+.t-escuro .st .ring.plus { color: var(--acc); }
+.t-escuro .main > p { background: var(--card); color: var(--ink); }
+
+/* componentes que usam a cor principal como fundo com texto branco: no escuro o texto passa a ser preto */
+.t-escuro .amt.on { background: var(--acc); border-color: var(--acc); color: #000; }
+.t-escuro .toast, .t-escuro .skip { background: var(--acc); color: #000; }
+.t-escuro .bub.me { background: var(--acc); color: #000; }
+.t-escuro .chips.dk .chip.on { color: #000; }
+.t-escuro .cb { background: rgba(0, 0, 0, .65); color: #fff; }
+.t-escuro .cover { background: #2c4d5e; }
+.t-escuro .kcol, .t-escuro .nt.new, .t-escuro .lock { background: #1a2329; }
+.t-escuro .th.on > button:first-child { border-color: var(--acc); }

@@ -1,0 +1,21 @@
+
+html.area-logada {
+  background: none;
+}
+
+body.area-logada {
+  min-height: 100%;
+  padding: 0;
+}
+
+:where(.area-logada) * {
+  padding: revert;
+}
+
+:where(.area-logada) p {
+  font-size: revert;
+}
+
+:where(.area-logada) span {
+  color: revert;
+}

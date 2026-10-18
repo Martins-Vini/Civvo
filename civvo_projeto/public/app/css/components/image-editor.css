@@ -1,0 +1,22 @@
+
+.ed {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  margin-top: 10px;
+  border-radius: 8px;
+  background: #14232c;
+}
+
+.ed.mom { width: 190px; aspect-ratio: 9 / 16; margin-left: auto; margin-right: auto; }
+.ed img { position: absolute; max-width: none; user-select: none; }
+
+.edc { display: grid; grid-template-columns: 78px 1fr; gap: 6px 10px; align-items: center; margin-top: 10px; font-size: 12px; color: var(--mut); }
+
+.thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 4px; }
+.th { position: relative; width: 52px; height: 52px; }
+.th > button:first-child { width: 100%; height: 100%; border-radius: 8px; overflow: hidden; border: 2px solid transparent; }
+.th.on > button:first-child { border-color: var(--pri); }
+.th img { width: 100%; height: 100%; object-fit: cover; }
+.th .rm { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; background: var(--bad); color: #fff; font-size: 10px; }

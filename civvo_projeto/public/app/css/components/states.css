@@ -1,0 +1,38 @@
+/* Estados vazios e esqueleto de carregamento. */
+
+.emp {
+  grid-column: 1/-1;
+  padding: 28px;
+  text-align: center;
+  color: var(--mut);
+}
+
+.card.emp {
+  color: var(--mut);
+}
+
+.sk {
+  background: var(--line);
+  border-radius: 8px;
+  animation: pl 1.2s infinite;
+}
+
+.sk.av {
+  border-radius: 50%;
+}
+
+@keyframes pl {
+  50% {
+    opacity: .5;
+  }
+}
+
+/* carregamento e envio: botão com spinner, barra de progresso de envio e "carregando mais" do feed */
+.spin { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: giro .7s linear infinite; vertical-align: -2px; }
+@keyframes giro { to { transform: rotate(360deg); } }
+.btn[disabled] { opacity: .75; cursor: progress; }
+.envio { margin: 12px 0; }
+.envio .bar b { transition: width .1s linear; }
+.upr { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px; }
+.upr .pc { font-variant-numeric: tabular-nums; }
+.mais .spin { margin-right: 6px; }

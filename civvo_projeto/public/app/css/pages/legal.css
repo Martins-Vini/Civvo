@@ -1,0 +1,8 @@
+/* Termos de Uso e Política de Privacidade. */
+
+.wl.lgl { place-items: start center; padding-top: 72px; }
+.lg-c { width: min(760px, 100%); padding: 28px; position: relative; z-index: 1; }
+.lg-c h1 { font-size: 26px; margin-bottom: 8px; }
+.lg-c h2 { font-size: 16px; margin: 22px 0 6px; }
+.lg-c p { color: var(--ink); line-height: 1.6; }
+.lg-c .lg-n { color: var(--mut); font-size: 13px; margin: 8px 0; }

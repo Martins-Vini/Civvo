@@ -1,0 +1,21 @@
+/* Barra de progresso (metas de campanha, demandas) e legenda de valores. */
+
+.bar {
+  height: 8px;
+  border-radius: 9px;
+  background: var(--line);
+  overflow: hidden;
+  margin: 6px 0 14px;
+}
+
+.bar b {
+  display: block;
+  height: 100%;
+  background: var(--pri);
+}
+
+.prog { margin-top: 12px; }
+
+.pg2 { display: flex; gap: 6px; font-size: 13px; color: var(--mut); }
+.pg2 span { margin-left: auto; }
+.pg2 b { color: var(--ink); }
