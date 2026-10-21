@@ -2,6 +2,8 @@ import { cadastrarUser } from '../services/api.js';
 import logoCivvoSvg from '../assets/logo-civvo.svg';
 import { setupPasswordInputs } from './password-inputs.js';
 
+const apenasDigitos = (valor) => String(valor || '').replace(/\D/g, '');
+
 export function renderCadastroUser() {
     const app = document.getElementById('app');
 
@@ -23,19 +25,19 @@ export function renderCadastroUser() {
 
       <section class="auth-card">
         <form id="cadastro-user-form" class="auth-form">
-          <label class="auth-field" for="name">
+          <label class="auth-field" for="nome">
             <span>Nome</span>
-            <input id="name" name="name" type="text" placeholder="Seu nome" required />
+            <input id="nome" name="nome" type="text" placeholder="Seu nome" autocomplete="given-name" required />
           </label>
 
-          <label class="auth-field" for="name">
+          <label class="auth-field" for="sobrenome">
             <span>Sobrenome</span>
-            <input id="name" name="name" type="text" placeholder="Seu sobrenome" required />
+            <input id="sobrenome" name="sobrenome" type="text" placeholder="Seu sobrenome" autocomplete="family-name" required />
           </label>
 
           <label class="auth-field" for="email">
             <span>E-mail</span>
-            <input id="email" name="email" type="email" placeholder="seu@email.com" required />
+            <input id="email" name="email" type="email" placeholder="seu@email.com" autocomplete="email" required />
           </label>
 
           <label class="auth-field" for="password">
@@ -60,14 +62,19 @@ export function renderCadastroUser() {
             </div>
           </label>
 
-          <label class="auth-field" for="confirmPassword">
-            <span>CPF (Opcional)</span>
-            <input id="cpf" name="cpf" type="number" placeholder="12345678999" />
+          <label class="auth-field" for="apelido_unico">
+            <span>Apelido único</span>
+            <input id="apelido_unico" name="apelido_unico" type="text" placeholder="Seu apelido" autocomplete="username" required />
           </label>
 
-          <label class="auth-field" for="confirmPassword">
-            <span>CadUnico (Opcional)</span>
-            <input id="cadunico" name="cadunico" type="number" placeholder="123456789" />
+          <label class="auth-field" for="cpf">
+            <span>CPF (Opcional)</span>
+            <input id="cpf" name="cpf" type="text" inputmode="numeric" maxlength="14" placeholder="12345678999" autocomplete="off" />
+          </label>
+
+          <label class="auth-field" for="cadunico">
+            <span>CadÚnico (Opcional)</span>
+            <input id="cadunico" name="cadunico" type="text" inputmode="numeric" placeholder="123456789" autocomplete="off" />
           </label>
 
           <button type="submit" class="auth-button">Cadastrar</button>
@@ -95,30 +102,65 @@ export function renderCadastroUser() {
     const form = document.getElementById('cadastro-user-form');
     setupPasswordInputs(form);
 
+    const mostrarStatus = (texto, erro = false) => {
+        form.querySelector('.auth-status')?.remove();
+
+        const status = document.createElement('p');
+        status.className = erro ? 'auth-status error' : 'auth-status';
+        status.setAttribute('role', erro ? 'alert' : 'status');
+        status.textContent = texto;
+        form.appendChild(status);
+    };
+
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
 
-        const payload = Object.fromEntries(new FormData(form).entries());
+        const valores = Object.fromEntries(new FormData(form).entries());
+
+        if (valores.password !== valores.confirmPassword) {
+            mostrarStatus('As senhas não conferem.', true);
+            return;
+        }
+
+        const cpf = apenasDigitos(valores.cpf);
+        if (cpf && cpf.length !== 11) {
+            mostrarStatus('O CPF deve ter 11 dígitos.', true);
+            return;
+        }
+
+        /* O back usa estes nomes de campo. cpf e cadunico_file vão como null quando vazios
+           (o model do back não aceita undefined nesses campos). */
+        const payload = {
+            email: valores.email.trim(),
+            password: valores.password,
+            nome: valores.nome.trim(),
+            sobrenome: valores.sobrenome.trim(),
+            apelido_unico: valores.apelido_unico.trim(),
+            cpf: cpf || null,
+            cadunico_file: apenasDigitos(valores.cadunico) || null,
+        };
+
+        const submitButton = form.querySelector('[type="submit"]');
+        const textoOriginal = submitButton.textContent;
+
+        submitButton.disabled = true;
+        submitButton.textContent = 'Cadastrando…';
 
         try {
-            const data = await cadastrarUser(payload);
-            const status = document.createElement('p');
-            status.className = 'auth-status';
-            status.textContent = data.message || 'Cadastro realizado com sucesso.';
+            await cadastrarUser(payload);
 
-            const oldStatus = form.querySelector('.auth-status');
-            if (oldStatus) oldStatus.remove();
+            mostrarStatus('Cadastro realizado com sucesso! Redirecionando para o login…');
 
-            form.appendChild(status);
+            /* o back não devolve token no cadastro, então o próximo passo é entrar */
+            setTimeout(() => {
+                if (window.location.hash === '#/cadastro-user') {
+                    window.location.hash = '#/login-user';
+                }
+            }, 1500);
         } catch (error) {
-            const status = document.createElement('p');
-            status.className = 'auth-status error';
-            status.textContent = error.message || 'Não foi possível cadastrar agora.';
-
-            const oldStatus = form.querySelector('.auth-status');
-            if (oldStatus) oldStatus.remove();
-
-            form.appendChild(status);
+            mostrarStatus(error.message || 'Não foi possível cadastrar agora.', true);
+            submitButton.disabled = false;
+            submitButton.textContent = textoOriginal;
         }
     });
 }

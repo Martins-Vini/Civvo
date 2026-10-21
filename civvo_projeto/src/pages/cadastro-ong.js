@@ -2,6 +2,17 @@ import { cadastrarOng } from '../services/api.js';
 import logoCivvoSvg from '../assets/logo-civvo.svg';
 import { setupPasswordInputs } from './password-inputs.js';
 
+const apenasDigitos = (valor) => String(valor || '').replace(/\D/g, '');
+
+function mascararCnpj(valor) {
+    return apenasDigitos(valor)
+        .slice(0, 14)
+        .replace(/^(\d{2})(\d)/, '$1.$2')
+        .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1/$2')
+        .replace(/(\d{4})(\d)/, '$1-$2');
+}
+
 export function renderCadastroOng() {
     const app = document.getElementById('app');
 
@@ -23,19 +34,15 @@ export function renderCadastroOng() {
       <section class="auth-card">
 
         <form id="cadastro-ong-form" class="auth-form">
-          <label class="auth-field" for="organizationName">
-            <span>Nome da organização</span>
-            <input id="organizationName" name="organizationName" type="text" placeholder="Nome da ONG" required />
-          </label>
-
           <label class="auth-field" for="cnpj">
             <span>CNPJ</span>
-            <input id="cnpj" name="cnpj" type="text" placeholder="00.000.000/0000-00" required />
+            <input id="cnpj" name="cnpj" type="text" inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00" autocomplete="off" aria-describedby="cnpj-ajuda" required />
+            <small class="auth-help" id="cnpj-ajuda">Razão social, nome fantasia e endereço são preenchidos automaticamente pela Receita Federal.</small>
           </label>
 
           <label class="auth-field" for="email">
             <span>E-mail institucional</span>
-            <input id="email" name="email" type="email" placeholder="contato@ong.com.br" required />
+            <input id="email" name="email" type="email" placeholder="contato@ong.com.br" autocomplete="email" required />
           </label>
 
           <label class="auth-field" for="password">
@@ -50,6 +57,19 @@ export function renderCadastroOng() {
               </div>
               <p class="password-strength-text" id="password-strength-text" aria-live="polite">Digite uma senha para ver a força.</p>
             </div>
+          </label>
+
+          <div class="auth-field">
+            <span>Telefone de contato</span>
+            <div class="auth-phone">
+              <input id="ddd" name="ddd" type="text" inputmode="numeric" maxlength="2" placeholder="DDD" aria-label="DDD" autocomplete="tel-area-code" required />
+              <input id="telefone" name="telefone" type="text" inputmode="numeric" maxlength="10" placeholder="Número" aria-label="Número de telefone" autocomplete="tel-local" required />
+            </div>
+          </div>
+
+          <label class="auth-check" for="is_whatsapp">
+            <input id="is_whatsapp" name="is_whatsapp" type="checkbox" />
+            <span>Este número tem WhatsApp</span>
           </label>
 
           <button type="submit" class="auth-button">Cadastrar</button>
@@ -79,30 +99,76 @@ export function renderCadastroOng() {
     const form = document.getElementById('cadastro-ong-form');
     setupPasswordInputs(form);
 
+    const campoCnpj = form.querySelector('#cnpj');
+    campoCnpj.addEventListener('input', () => {
+        campoCnpj.value = mascararCnpj(campoCnpj.value);
+    });
+
+    const mostrarStatus = (texto, erro = false) => {
+        form.querySelector('.auth-status')?.remove();
+
+        const status = document.createElement('p');
+        status.className = erro ? 'auth-status error' : 'auth-status';
+        status.setAttribute('role', erro ? 'alert' : 'status');
+        status.textContent = texto;
+        form.appendChild(status);
+    };
+
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
 
-        const payload = Object.fromEntries(new FormData(form).entries());
+        const valores = Object.fromEntries(new FormData(form).entries());
+
+        const cnpj = apenasDigitos(valores.cnpj);
+        if (cnpj.length !== 14) {
+            mostrarStatus('O CNPJ deve ter 14 dígitos.', true);
+            return;
+        }
+
+        const ddd = apenasDigitos(valores.ddd);
+        const numero = apenasDigitos(valores.telefone);
+        if (ddd.length !== 2) {
+            mostrarStatus('Informe o DDD com 2 dígitos.', true);
+            return;
+        }
+        if (numero.length < 8 || numero.length > 9) {
+            mostrarStatus('O telefone deve ter 8 ou 9 dígitos.', true);
+            return;
+        }
+
+        /* Razão social, nome fantasia, CNAE e endereço o back busca na Receita Federal pelo CNPJ. */
+        const payload = {
+            email: valores.email.trim(),
+            password: valores.password,
+            cnpj,
+            telefone: {
+                ddd,
+                numero,
+                is_whatsapp: form.elements.is_whatsapp.checked,
+            },
+        };
+
+        const submitButton = form.querySelector('[type="submit"]');
+        const textoOriginal = submitButton.textContent;
+
+        submitButton.disabled = true;
+        submitButton.textContent = 'Validando CNPJ…'; /* o back consulta a Receita, pode levar alguns segundos */
 
         try {
-            const data = await cadastrarOng(payload);
-            const status = document.createElement('p');
-            status.className = 'auth-status';
-            status.textContent = data.message || 'Cadastro da ONG realizado com sucesso.';
+            await cadastrarOng(payload);
 
-            const oldStatus = form.querySelector('.auth-status');
-            if (oldStatus) oldStatus.remove();
+            mostrarStatus('ONG cadastrada e validada pela Receita Federal! Redirecionando para o login…');
 
-            form.appendChild(status);
+            /* o back não devolve token no cadastro, então o próximo passo é entrar */
+            setTimeout(() => {
+                if (window.location.hash === '#/cadastro-ong') {
+                    window.location.hash = '#/login-ong';
+                }
+            }, 2000);
         } catch (error) {
-            const status = document.createElement('p');
-            status.className = 'auth-status error';
-            status.textContent = error.message || 'Não foi possível cadastrar agora.';
-
-            const oldStatus = form.querySelector('.auth-status');
-            if (oldStatus) oldStatus.remove();
-
-            form.appendChild(status);
+            mostrarStatus(error.message || 'Não foi possível cadastrar agora.', true);
+            submitButton.disabled = false;
+            submitButton.textContent = textoOriginal;
         }
     });
 }
