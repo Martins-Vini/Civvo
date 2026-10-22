@@ -1,6 +1,10 @@
 import { loginOng } from '../services/api.js';
+import { criarSessao, salvarSessao, rotaInicial } from '../services/sessao.js';
 import logoCivvoSvg from '../assets/logo-civvo.svg';
 import { setupPasswordInputs } from './password-inputs.js';
+
+/* tempo (ms) que a mensagem de sucesso fica visível antes de entrar no app */
+const ATRASO_ENTRADA_MS = 1500;
 
 export function renderLoginOng() {
     const app = document.getElementById('app');
@@ -70,27 +74,44 @@ export function renderLoginOng() {
     const form = document.getElementById('login-ong-form');
     setupPasswordInputs(form);
 
+    const mostrarStatus = (texto, erro = false) => {
+        form.querySelector('.auth-status')?.remove();
+
+        const status = document.createElement('p');
+        status.className = erro ? 'auth-status error' : 'auth-status';
+        status.setAttribute('role', erro ? 'alert' : 'status');
+        status.textContent = texto;
+        form.appendChild(status);
+    };
+
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
 
-        const payload = Object.fromEntries(new FormData(form).entries());
+        const { email, password } = Object.fromEntries(new FormData(form).entries());
         const submitButton = form.querySelector('[type="submit"]');
+        const textoOriginal = submitButton.textContent;
+
         submitButton.disabled = true;
+        submitButton.textContent = 'Entrando…';
 
         try {
-            await loginOng(payload);
-            window.location.hash = '#/confirmacao-login-ong';
+            const resposta = await loginOng({ email: email.trim(), password });
+            const sessao = criarSessao('ong', resposta, { email: email.trim() });
+
+            /* mostra o sucesso e só entra depois de um instante (botão fica travado nesse intervalo) */
+            mostrarStatus('Login feito com sucesso! Entrando…');
+
+            setTimeout(() => {
+                /* se a pessoa saiu da tela nesse intervalo, não abre o app */
+                if (window.location.hash === '#/login-ong') {
+                    salvarSessao(sessao);
+                    window.location.hash = rotaInicial(sessao);
+                }
+            }, ATRASO_ENTRADA_MS);
         } catch (error) {
-            const status = document.createElement('p');
-            status.className = 'auth-status error';
-            status.textContent = error.message || 'Não foi possível entrar agora.';
-
-            const oldStatus = form.querySelector('.auth-status');
-            if (oldStatus) oldStatus.remove();
-
-            form.appendChild(status);
-        } finally {
+            mostrarStatus(error.message || 'Não foi possível entrar agora.', true);
             submitButton.disabled = false;
+            submitButton.textContent = textoOriginal;
         }
     });
 }

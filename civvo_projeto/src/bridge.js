@@ -1,14 +1,11 @@
 
 
-
 import './main.js';
+import { lerSessao, salvarSessao, limparSessao, rotaInicial, tokenExpirado } from './services/sessao.js';
 
 const BASE = import.meta.env?.BASE_URL ?? '/';
 
-const PUBLICAS = ['#/inicio', '#/login-user', '#/login-ong', '#/confirmacao-login-ong', '#/cadastro-user', '#/cadastro-ong'];
-
-const CHAVE = 'civvo.sessao';
-const PERFIS = { DOADOR: 'doador', ONG: 'ong', ADMIN: 'admin' };
+const PUBLICAS = ['#/inicio', '#/login-user', '#/login-ong', '#/cadastro-user', '#/cadastro-ong'];
 
 const areaPublica = document.getElementById('app');
 const areaLogada = document.getElementById('area-logada');
@@ -16,52 +13,15 @@ const linksDoApp = [];
 let appCarregando = null;
 let appCarregado = false;
 
+/* A sessão em si é criada pelas páginas de login (services/sessao.js). Aqui só lemos e encerramos. */
 export const sessao = {
-  ler() {
-    try {
-      return JSON.parse(sessionStorage.getItem(CHAVE));
-    } catch {
-      return null;
-    }
-  },
-  entrar(s) {
-    sessionStorage.setItem(CHAVE, JSON.stringify(s));
-  },
-  sair() {
-    sessionStorage.removeItem(CHAVE);
-  },
+  ler: lerSessao,
+  entrar: salvarSessao,
+  sair: limparSessao,
 };
 window.CivvoSessao = sessao;
 
 const modoDemo = () => new URLSearchParams(location.search).has('demo') || import.meta.env?.VITE_DEMO === 'true';
-
-function sessaoDoLogin(perfilPadrao, dados = {}) {
-  const usuario = dados.user || dados.usuario || dados.data || {};
-  const tipo = String(usuario.user_type || dados.role || dados.perfil || '').toUpperCase();
-
-  return {
-    perfil: PERFIS[tipo] || perfilPadrao,
-    usuario,
-    token: dados.token || null,
-  };
-}
-
-const telaInicial = (s) => (s.perfil == 'admin' ? '#/admin' : '#/feed');
-
-const fetchOriginal = window.fetch.bind(window);
-
-window.fetch = async (url, opcoes) => {
-  const resposta = await fetchOriginal(url, opcoes);
-
-  if (resposta.ok && /\/login-user$/.test(String(url))) {
-    const dados = await resposta.clone().json().catch(() => ({}));
-    const nova = sessaoDoLogin('doador', dados);
-    sessao.entrar(nova);
-    location.hash = telaInicial(nova);
-  }
-
-  return resposta;
-};
 
 function mostrar(logada) {
   window.__civvoPublico = !logada;
@@ -92,7 +52,7 @@ function carregarScript(src) {
 
 function carregarApp() {
   appCarregando ??= (async () => {
-    const html = await (await fetchOriginal(`${BASE}app/index.html`)).text();
+    const html = await (await fetch(`${BASE}app/index.html`)).text();
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const local = (c) => c && !/^(https?:)?\/\//.test(c) && !c.startsWith('/');
     const estilos = [...doc.querySelectorAll('link[rel="stylesheet"]')].map((l) => l.getAttribute('href')).filter(local);
@@ -138,6 +98,12 @@ function roteia() {
 
   let s = sessao.ler();
 
+  /* token vencido (o back emite 7 dias para doador/ONG e 8 h para admin): encerra e recarrega no início */
+  if (s && tokenExpirado(s.token)) {
+    location.hash = '#/sair';
+    return;
+  }
+
   if (!s && modoDemo()) {
     s = { perfil: 'doador', usuario: {}, demo: true };
     sessao.entrar(s);
@@ -150,7 +116,7 @@ function roteia() {
   }
 
   if (hash === '' || hash === '#/') {
-    location.hash = telaInicial(s);
+    location.hash = rotaInicial(s);
     return;
   }
 

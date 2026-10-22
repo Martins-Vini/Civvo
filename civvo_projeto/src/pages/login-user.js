@@ -1,5 +1,10 @@
 import { loginUser } from '../services/api.js';
+import { criarSessao, salvarSessao, rotaInicial } from '../services/sessao.js';
+import { mostrarModalSucesso } from './modal-sucesso.js';
 import logoCivvoSvg from '../assets/logo-civvo.svg';
+
+/* tempo (ms) que o modal de sucesso fica visível antes de entrar no app */
+const ATRASO_ENTRADA_MS = 2500;
 
 export function renderLoginUser() {
     const app = document.getElementById('app');
@@ -18,19 +23,19 @@ export function renderLoginUser() {
     <main class="auth-page">
         <p class="auth-role">Usuário</p>
         <h1 class="titulo-auth">Bem-vindo(a) de volta!</h1>
-        <p class="auth-subtitle">Preencha suas informações <span class="span-auth">abaixo.<span></p>
+        <p class="auth-subtitle">Preencha suas informações <span class="span-auth">abaixo.</span></p>
 
 
       <section class="auth-card">
         <form id="login-user-form" class="auth-form">
           <label class="auth-field" for="email">
-            <span>E-mail ou Apelido Ùnico</span>
-            <input id="email" name="email" type="email" placeholder="usuariodoador@gmail.com" required />
+            <span>E-mail</span>
+            <input id="email" name="email" type="email" placeholder="usuariodoador@gmail.com" autocomplete="email" required />
           </label>
 
           <label class="auth-field" for="password">
             <span>Senha</span>
-            <input id="password" name="password" type="password" placeholder="Digite sua senha" required />
+            <input id="password" name="password" type="password" placeholder="Digite sua senha" autocomplete="current-password" required />
           </label>
 
           <a href="#" class="forgot-password">Esqueceu sua senha?</a>
@@ -63,30 +68,43 @@ export function renderLoginUser() {
 
     const form = document.getElementById('login-user-form');
 
+    const mostrarStatus = (texto, erro = false) => {
+        form.querySelector('.auth-status')?.remove();
+
+        const status = document.createElement('p');
+        status.className = erro ? 'auth-status error' : 'auth-status';
+        status.setAttribute('role', erro ? 'alert' : 'status');
+        status.textContent = texto;
+        form.appendChild(status);
+    };
+
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
 
-        const payload = Object.fromEntries(new FormData(form).entries());
+        const { email, password } = Object.fromEntries(new FormData(form).entries());
+        const submitButton = form.querySelector('[type="submit"]');
+        const textoOriginal = submitButton.textContent;
+
+        submitButton.disabled = true;
+        submitButton.textContent = 'Entrando…';
 
         try {
-            const data = await loginUser(payload);
-            const status = document.createElement('p');
-            status.className = 'auth-status';
-            status.textContent = data.message || 'Login realizado com sucesso.';
+            const resposta = await loginUser({ email: email.trim(), password });
+            const sessao = criarSessao('doador', resposta, { email: email.trim() });
 
-            const oldStatus = form.querySelector('.auth-status');
-            if (oldStatus) oldStatus.remove();
-
-            form.appendChild(status);
+            /* o botão fica travado; o modal mostra o sucesso e, ao terminar, grava a sessão e entra no app.
+               Se a pessoa sair da tela nesse intervalo, o modal é cancelado e nada é gravado. */
+            mostrarModalSucesso({
+                duracao: ATRASO_ENTRADA_MS,
+                aoConcluir: () => {
+                    salvarSessao(sessao);
+                    window.location.hash = rotaInicial(sessao);
+                },
+            });
         } catch (error) {
-            const status = document.createElement('p');
-            status.className = 'auth-status error';
-            status.textContent = error.message || 'Não foi possível entrar agora.';
-
-            const oldStatus = form.querySelector('.auth-status');
-            if (oldStatus) oldStatus.remove();
-
-            form.appendChild(status);
+            mostrarStatus(error.message || 'Não foi possível entrar agora.', true);
+            submitButton.disabled = false;
+            submitButton.textContent = textoOriginal;
         }
     });
 }
