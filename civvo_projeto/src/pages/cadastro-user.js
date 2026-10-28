@@ -1,4 +1,7 @@
-import { cadastrarUser } from '../services/api.js';
+import { solicitarCadastroUser, confirmarCadastroUser } from '../services/api.js';
+import { mostrarModalSucesso } from './modal-sucesso.js';
+import { mostrarEtapaCodigo } from './codigo-verificacao.js';
+import { configurarGoogle } from './google-auth.js';
 import logoCivvoSvg from '../assets/logo-civvo.svg';
 import { setupPasswordInputs } from './password-inputs.js';
 
@@ -112,6 +115,8 @@ export function renderCadastroUser() {
         form.appendChild(status);
     };
 
+    configurarGoogle({ form, mostrarStatus, texto: 'signup_with' });
+
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
 
@@ -144,21 +149,38 @@ export function renderCadastroUser() {
         const textoOriginal = submitButton.textContent;
 
         submitButton.disabled = true;
-        submitButton.textContent = 'Cadastrando…';
+        submitButton.textContent = 'Enviando código…';
 
         try {
-            await cadastrarUser(payload);
+            /* etapa 1: o back confere se o e-mail está livre e envia um código de 6 dígitos */
+            await solicitarCadastroUser({ email: payload.email });
 
-            mostrarStatus('Cadastro realizado com sucesso! Redirecionando para o login…');
+            form.querySelector('.auth-status')?.remove();
 
-            /* o back não devolve token no cadastro, então o próximo passo é entrar */
-            setTimeout(() => {
-                if (window.location.hash === '#/cadastro-user') {
-                    window.location.hash = '#/login-user';
-                }
-            }, 1500);
+            /* etapa 2: código digitado + dados do formulário -> conta criada */
+            mostrarEtapaCodigo({
+                form,
+                email: payload.email,
+                titulo: 'Confirme seu e-mail',
+                textoBotao: 'Confirmar cadastro',
+                aoReenviar: () => solicitarCadastroUser({ email: payload.email }),
+                aoConfirmar: async (codigo) => {
+                    await confirmarCadastroUser({ ...payload, codigo });
+
+                    /* o back não devolve token no cadastro, então o próximo passo é entrar */
+                    mostrarModalSucesso({
+                        titulo: 'Cadastro realizado com sucesso!',
+                        texto: 'Estamos te levando para o login',
+                        duracao: 2500,
+                        aoConcluir: () => {
+                            window.location.hash = '#/login-user';
+                        },
+                    });
+                },
+            });
         } catch (error) {
             mostrarStatus(error.message || 'Não foi possível cadastrar agora.', true);
+        } finally {
             submitButton.disabled = false;
             submitButton.textContent = textoOriginal;
         }
