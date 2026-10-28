@@ -1,6 +1,8 @@
-import { loginUser } from '../services/api.js';
+import { iniciarLoginUser, verificarLoginUser } from '../services/api.js';
 import { criarSessao, salvarSessao, rotaInicial } from '../services/sessao.js';
 import { mostrarModalSucesso } from './modal-sucesso.js';
+import { mostrarEtapaCodigo } from './codigo-verificacao.js';
+import { configurarGoogle } from './google-auth.js';
 import logoCivvoSvg from '../assets/logo-civvo.svg';
 
 /* tempo (ms) que o modal de sucesso fica visível antes de entrar no app */
@@ -78,31 +80,53 @@ export function renderLoginUser() {
         form.appendChild(status);
     };
 
+    configurarGoogle({ form, mostrarStatus, texto: 'signin_with' });
+
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
 
         const { email, password } = Object.fromEntries(new FormData(form).entries());
+        const emailLimpo = email.trim();
         const submitButton = form.querySelector('[type="submit"]');
         const textoOriginal = submitButton.textContent;
 
         submitButton.disabled = true;
-        submitButton.textContent = 'Entrando…';
+        submitButton.textContent = 'Enviando código…';
 
         try {
-            const resposta = await loginUser({ email: email.trim(), password });
-            const sessao = criarSessao('doador', resposta, { email: email.trim() });
+            /* etapa 1: o back confere a senha e envia um código de 6 dígitos para o e-mail */
+            const resposta = await iniciarLoginUser({ email: emailLimpo, password });
+            if (!resposta.requiresTwoFactor) {
+                throw new Error('Resposta inesperada do servidor. Tente novamente.');
+            }
 
-            /* o botão fica travado; o modal mostra o sucesso e, ao terminar, grava a sessão e entra no app.
-               Se a pessoa sair da tela nesse intervalo, o modal é cancelado e nada é gravado. */
-            mostrarModalSucesso({
-                duracao: ATRASO_ENTRADA_MS,
-                aoConcluir: () => {
-                    salvarSessao(sessao);
-                    window.location.hash = rotaInicial(sessao);
+            form.querySelector('.auth-status')?.remove();
+
+            /* etapa 2: código digitado -> token. A sessão só é gravada quando o modal termina. */
+            mostrarEtapaCodigo({
+                form,
+                email: emailLimpo,
+                titulo: 'Verificação em duas etapas',
+                textoBotao: 'Confirmar e entrar',
+                aoReenviar: () => iniciarLoginUser({ email: emailLimpo, password }),
+                aoConfirmar: async (codigo) => {
+                    const dados = await verificarLoginUser({ email: emailLimpo, codigo });
+                    if (!dados.token) throw new Error('Não foi possível concluir o login.');
+
+                    const sessao = criarSessao('doador', dados, { email: emailLimpo });
+
+                    mostrarModalSucesso({
+                        duracao: ATRASO_ENTRADA_MS,
+                        aoConcluir: () => {
+                            salvarSessao(sessao);
+                            window.location.hash = rotaInicial(sessao);
+                        },
+                    });
                 },
             });
         } catch (error) {
             mostrarStatus(error.message || 'Não foi possível entrar agora.', true);
+        } finally {
             submitButton.disabled = false;
             submitButton.textContent = textoOriginal;
         }

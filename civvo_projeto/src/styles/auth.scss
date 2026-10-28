@@ -299,6 +299,27 @@
   box-shadow: 0 1px 2px rgba(60, 64, 67, 0.18);
 }
 
+.google-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* botão oficial do Google, invisível, por cima do botão estilizado: recebe o clique */
+.google-wrapper__oficial {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0.01;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 12px;
+}
+
+.google-wrapper__oficial > div {
+  width: 100%;
+}
+
 .google-icon {
   width: 20px;
   height: 20px;
@@ -348,6 +369,7 @@ form p {
   padding: 20px 0;
 }
 
+/* ===== Modal de sucesso (login) ===== */
 .modal-sucesso {
   position: fixed;
   inset: 0;
@@ -488,4 +510,75 @@ form p {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ===== Etapa do código de verificação (cadastro e login do doador) ===== */
+.auth-code {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+}
+
+.auth-code__titulo {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0e3e56;
+}
+
+.auth-code__texto {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: #476670;
+}
+
+.auth-code__texto strong {
+  color: #0e3e56;
+  overflow-wrap: anywhere;
+}
+
+.auth-code__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-field .auth-code__input {
+  text-align: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.45em;
+  padding-left: 0.45em;
+}
+
+.auth-code__dica {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #5a6075;
+}
+
+.auth-code__acoes {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.auth-code__acoes button {
+  padding: 6px 2px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #38687f;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.auth-code__acoes button:disabled {
+  color: #8aa0a8;
+  text-decoration: none;
+  cursor: default;
 }

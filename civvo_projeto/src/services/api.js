@@ -59,8 +59,25 @@ export async function apiRequest(endpoint, { method = 'GET', dados = null, auten
     return corpo ?? {};
 }
 
-/* Rotas de autenticação do back */
-export const loginUser = (payload) => apiRequest('/auth/login', { method: 'POST', dados: payload });
+/* ---- Doador: cadastro e login em 2 etapas (código de 6 dígitos enviado por e-mail) ---- */
+
+/* Cadastro, etapa 1: o back confere se o e-mail está livre e envia o código. Body: { email } */
+export const solicitarCadastroUser = (payload) => apiRequest('/auth/register/solicitar', { method: 'POST', dados: payload });
+
+/* Cadastro, etapa 2: valida o código e cria a conta.
+   Body: { email, codigo, password, nome, sobrenome, apelido_unico, cpf, cadunico_file } */
+export const confirmarCadastroUser = (payload) => apiRequest('/auth/register/confirmar', { method: 'POST', dados: payload });
+
+/* Login, etapa 1: confere a senha e envia o código. Resposta: { requiresTwoFactor: true } */
+export const iniciarLoginUser = (payload) => apiRequest('/auth/login/iniciar', { method: 'POST', dados: payload });
+
+/* Login, etapa 2: valida o código. Resposta: { token, user } */
+export const verificarLoginUser = (payload) => apiRequest('/auth/login/verificar', { method: 'POST', dados: payload });
+
+/* ---- Doador: login/cadastro com Google ----
+   Body: { token } (ID token do Google). Resposta: { token, user }. Cria a conta se o e-mail for novo. */
+export const loginGoogle = (payload) => apiRequest('/auth/google', { method: 'POST', dados: payload });
+
+/* ---- ONG: login e cadastro diretos ---- */
 export const loginOng = (payload) => apiRequest('/ong/login/ong', { method: 'POST', dados: payload });
-export const cadastrarUser = (payload) => apiRequest('/auth/register/doador', { method: 'POST', dados: payload });
 export const cadastrarOng = (payload) => apiRequest('/ong/register/ong', { method: 'POST', dados: payload });
