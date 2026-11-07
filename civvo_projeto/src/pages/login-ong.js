@@ -1,6 +1,7 @@
 import { loginOng } from '../services/api.js';
 import { criarSessao, salvarSessao, rotaInicial } from '../services/sessao.js';
 import { mostrarModalSucesso } from './modal-sucesso.js';
+import { comCarregando } from './modal-carregando.js';
 import logoCivvoSvg from '../assets/logo-civvo.svg';
 import { setupPasswordInputs } from './password-inputs.js';
 
@@ -82,7 +83,17 @@ export function renderLoginOng() {
         submitButton.textContent = 'Entrando…';
 
         try {
-            const resposta = await loginOng({ email: email.trim(), password });
+            const resposta = await comCarregando(
+                {
+                    titulo: 'Entrando',
+                    mensagens: [
+                        'Conferindo suas credenciais…',
+                        'Acessando o painel da sua ONG…',
+                        'Quase lá…',
+                    ],
+                },
+                () => loginOng({ email: email.trim(), password })
+            );
             const sessao = criarSessao('ong', resposta, { email: email.trim() });
 
             /* o botão fica travado; o modal mostra o sucesso e, ao terminar, grava a sessão e entra no app.

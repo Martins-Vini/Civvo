@@ -1,6 +1,7 @@
 import { cadastrarOng } from '../services/api.js';
 import logoCivvoSvg from '../assets/logo-civvo.svg';
 import { setupPasswordInputs } from './password-inputs.js';
+import { comCarregando } from './modal-carregando.js';
 
 const apenasDigitos = (valor) => String(valor || '').replace(/\D/g, '');
 
@@ -143,7 +144,21 @@ export function renderCadastroOng() {
         submitButton.textContent = 'Validando CNPJ…'; /* o back consulta a Receita, pode levar alguns segundos */
 
         try {
-            await cadastrarOng(payload);
+            /* o back valida o CNPJ na Receita Federal, que é a etapa mais demorada do cadastro */
+            await comCarregando(
+                {
+                    titulo: 'Cadastrando sua ONG',
+                    mensagens: [
+                        'Conferindo os dados informados…',
+                        'Consultando o CNPJ na Receita Federal…',
+                        'Validando as informações da sua ONG…',
+                        'Criando o acesso da sua ONG…',
+                        'Quase lá…',
+                    ],
+                    intervalo: 2500,
+                },
+                () => cadastrarOng(payload)
+            );
 
             mostrarStatus('ONG cadastrada e validada pela Receita Federal! Redirecionando para o login…');
 
