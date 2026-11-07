@@ -6,6 +6,7 @@ import { loginGoogle } from '../services/api.js';
 import { ativarBotaoGoogle, emailDoCredential } from '../services/google.js';
 import { criarSessao, salvarSessao, rotaInicial } from '../services/sessao.js';
 import { mostrarModalSucesso } from './modal-sucesso.js';
+import { comCarregando } from './modal-carregando.js';
 
 const ATRASO_ENTRADA_MS = 2500;
 
@@ -25,7 +26,13 @@ export function configurarGoogle({ form, mostrarStatus, texto = 'signin_with' })
             mostrarStatus('Entrando com o Google…');
 
             try {
-                const dados = await loginGoogle({ token: credential });
+                const dados = await comCarregando(
+                    {
+                        titulo: 'Entrando com o Google',
+                        mensagens: ['Conectando com o Google…', 'Verificando a sua conta…', 'Quase lá…'],
+                    },
+                    () => loginGoogle({ token: credential })
+                );
                 if (!dados.token) throw new Error('Não foi possível concluir o login com o Google.');
 
                 const sessao = criarSessao('doador', dados, { email: emailDoCredential(credential) });

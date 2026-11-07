@@ -2,6 +2,7 @@
 
 import './main.js';
 import { lerSessao, salvarSessao, limparSessao, rotaInicial, tokenExpirado } from './services/sessao.js';
+import { mostrarModalCarregando } from './pages/modal-carregando.js';
 
 const BASE = import.meta.env?.BASE_URL ?? '/';
 
@@ -52,27 +53,38 @@ function carregarScript(src) {
 
 function carregarApp() {
   appCarregando ??= (async () => {
-    const html = await (await fetch(`${BASE}app/index.html`)).text();
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const local = (c) => c && !/^(https?:)?\/\//.test(c) && !c.startsWith('/');
-    const estilos = [...doc.querySelectorAll('link[rel="stylesheet"]')].map((l) => l.getAttribute('href')).filter(local);
-    const scripts = [...doc.querySelectorAll('script[src]')].map((s) => s.getAttribute('src')).filter(local);
-
-    estilos.forEach((href) => {
-      const l = document.createElement('link');
-      l.rel = 'stylesheet';
-      l.href = `${BASE}app/${href}`;
-      document.head.append(l);
-      linksDoApp.push(l);
+    /* só aparece se o carregamento demorar (o modal espera 500 ms antes de surgir) */
+    const carregando = mostrarModalCarregando({
+      titulo: 'Preparando a Civvo',
+      mensagens: ['Carregando o seu espaço…', 'Organizando o seu feed…', 'Quase lá…'],
+      atraso: 500,
     });
 
-    window.__civvoSessao = sessao.ler();
+    try {
+      const html = await (await fetch(`${BASE}app/index.html`)).text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const local = (c) => c && !/^(https?:)?\/\//.test(c) && !c.startsWith('/');
+      const estilos = [...doc.querySelectorAll('link[rel="stylesheet"]')].map((l) => l.getAttribute('href')).filter(local);
+      const scripts = [...doc.querySelectorAll('script[src]')].map((s) => s.getAttribute('src')).filter(local);
 
-    for (const src of scripts) {
-      await carregarScript(`${BASE}app/${src}`);
+      estilos.forEach((href) => {
+        const l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = `${BASE}app/${href}`;
+        document.head.append(l);
+        linksDoApp.push(l);
+      });
+
+      window.__civvoSessao = sessao.ler();
+
+      for (const src of scripts) {
+        await carregarScript(`${BASE}app/${src}`);
+      }
+
+      appCarregado = true;
+    } finally {
+      carregando.fechar();
     }
-
-    appCarregado = true;
   })().catch((e) => {
     areaLogada.innerHTML = '<p style="padding:24px">Não foi possível carregar o app. Atualize a página.</p>';
     console.error(e);

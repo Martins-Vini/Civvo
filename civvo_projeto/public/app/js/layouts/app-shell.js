@@ -63,9 +63,29 @@ function openMenu() {
      <label style="margin-top:0">Visão (demonstração)</label>
      ${roleSeg(1)}
      <a class="btn light full" style="margin-top:22px" href="#/config" onclick="closeModal()">Configurações</a>
-     <a class="btn ghost full" style="margin-top:10px" href="${LOGIN_URL}" onclick="closeModal()">Sair</a>`,
+     <button class="btn ghost full" style="margin-top:10px" onclick="confirmarSair()">Sair</button>`,
     'Menu'
   );
+}
+
+/* Pergunta antes de encerrar a sessão (evita sair sem querer).
+   A confirmação fica no clique: as saídas automáticas (sessão expirada, 401) continuam indo direto para #/sair. */
+function confirmarSair() {
+  openModal(
+    `<h3>Sair da sua conta?</h3>
+     <p style="color:var(--mut);font-size:14px;margin:0 0 18px">Você precisará entrar de novo para voltar a usar a Civvo.</p>
+     <button class="btn full" id="sairNao" onclick="closeModal()">Continuar na Civvo</button>
+     <button class="btn ghost full" style="margin-top:10px" onclick="sairAgora()">Sim, sair</button>`,
+    'Confirmar saída'
+  );
+
+  /* o foco começa no botão seguro ("Continuar"), para um Enter distraído não encerrar a sessão */
+  $('#sairNao')?.focus();
+}
+
+function sairAgora() {
+  closeModal();
+  location.hash = LOGIN_URL;
 }
 
 function shell(inner, on, { rightCol = 1, wide = 0 } = {}) {
@@ -118,10 +138,10 @@ function shell(inner, on, { rightCol = 1, wide = 0 } = {}) {
           ${ic('menu')}
           <span>Menu</span>
         </button>
-        <a class="nav" href="${LOGIN_URL}">
+        <button class="nav" onclick="confirmarSair()" aria-haspopup="dialog">
           ${ic('out')}
           <span>Sair</span>
-        </a>
+        </button>
       </aside>
 
       <main id="conteudo" class="main ${wide ? 'wide' : ''}">
