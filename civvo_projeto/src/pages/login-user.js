@@ -1,6 +1,7 @@
 import { iniciarLoginUser, verificarLoginUser } from '../services/api.js';
 import { criarSessao, salvarSessao, rotaInicial } from '../services/sessao.js';
 import { mostrarModalSucesso } from './modal-sucesso.js';
+import { comCarregando } from './modal-carregando.js';
 import { mostrarEtapaCodigo } from './codigo-verificacao.js';
 import { configurarGoogle } from './google-auth.js';
 import logoCivvoSvg from '../assets/logo-civvo.svg';
@@ -95,7 +96,17 @@ export function renderLoginUser() {
 
         try {
             /* etapa 1: o back confere a senha e envia um código de 6 dígitos para o e-mail */
-            const resposta = await iniciarLoginUser({ email: emailLimpo, password });
+            const resposta = await comCarregando(
+                {
+                    titulo: 'Verificando seus dados',
+                    mensagens: [
+                        'Conferindo e-mail e senha…',
+                        'Enviando o código para o seu e-mail…',
+                        'Quase lá…',
+                    ],
+                },
+                () => iniciarLoginUser({ email: emailLimpo, password })
+            );
             if (!resposta.requiresTwoFactor) {
                 throw new Error('Resposta inesperada do servidor. Tente novamente.');
             }
@@ -110,7 +121,13 @@ export function renderLoginUser() {
                 textoBotao: 'Confirmar e entrar',
                 aoReenviar: () => iniciarLoginUser({ email: emailLimpo, password }),
                 aoConfirmar: async (codigo) => {
-                    const dados = await verificarLoginUser({ email: emailLimpo, codigo });
+                    const dados = await comCarregando(
+                        {
+                            titulo: 'Confirmando seu código',
+                            mensagens: ['Validando o código…', 'Preparando o seu acesso…', 'Quase lá…'],
+                        },
+                        () => verificarLoginUser({ email: emailLimpo, codigo })
+                    );
                     if (!dados.token) throw new Error('Não foi possível concluir o login.');
 
                     const sessao = criarSessao('doador', dados, { email: emailLimpo });

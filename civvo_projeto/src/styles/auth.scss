@@ -582,3 +582,95 @@ form p {
   text-decoration: none;
   cursor: default;
 }
+
+
+/* ===== Modal de carregamento (barra de progresso + mensagens rotativas) ===== */
+.modal-carregando {
+  position: fixed;
+  inset: 0;
+  z-index: 999; /* logo abaixo do modal de sucesso (1000) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(14, 62, 86, 0.55);
+  backdrop-filter: blur(4px);
+  animation: modal-sucesso-fundo 0.2s ease-out both;
+  transition: opacity 0.22s ease;
+}
+
+.modal-carregando--saindo {
+  opacity: 0;
+}
+
+.modal-carregando__card {
+  width: min(100%, 360px);
+  padding: 32px 24px 28px;
+  border-radius: 24px;
+  background: #fff;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(14, 62, 86, 0.35);
+  outline: none;
+  animation: modal-sucesso-card 0.35s cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+
+.modal-carregando__spinner {
+  display: block;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 18px;
+  border: 5px solid #e3eef3;
+  border-top-color: #38687f;
+  border-radius: 50%;
+  animation: modal-carregando-giro 0.8s linear infinite;
+}
+
+.modal-carregando__titulo {
+  margin: 0 0 18px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0e3e56;
+}
+
+.modal-carregando__progresso {
+  height: 6px;
+  margin: 0 auto 14px;
+  max-width: 240px;
+  border-radius: 999px;
+  background: #e3eef3;
+  overflow: hidden;
+}
+
+.modal-carregando__progresso span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #38687f, #1e9e66);
+  transition: width 0.15s linear;
+}
+
+.modal-carregando__texto {
+  min-height: 1.5em;
+  margin: 0;
+  font-size: 0.95rem;
+  color: #476670;
+  transition: opacity 0.18s ease;
+}
+
+.modal-carregando__texto--trocando {
+  opacity: 0;
+}
+
+@keyframes modal-carregando-giro {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-carregando,
+  .modal-carregando * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

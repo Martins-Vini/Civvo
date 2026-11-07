@@ -1,5 +1,6 @@
 import { solicitarCadastroUser, confirmarCadastroUser } from '../services/api.js';
 import { mostrarModalSucesso } from './modal-sucesso.js';
+import { comCarregando } from './modal-carregando.js';
 import { mostrarEtapaCodigo } from './codigo-verificacao.js';
 import { configurarGoogle } from './google-auth.js';
 import logoCivvoSvg from '../assets/logo-civvo.svg';
@@ -153,7 +154,17 @@ export function renderCadastroUser() {
 
         try {
             /* etapa 1: o back confere se o e-mail está livre e envia um código de 6 dígitos */
-            await solicitarCadastroUser({ email: payload.email });
+            await comCarregando(
+                {
+                    titulo: 'Preparando seu cadastro',
+                    mensagens: [
+                        'Verificando se o e-mail está disponível…',
+                        'Enviando o código para o seu e-mail…',
+                        'Quase lá…',
+                    ],
+                },
+                () => solicitarCadastroUser({ email: payload.email })
+            );
 
             form.querySelector('.auth-status')?.remove();
 
@@ -165,7 +176,13 @@ export function renderCadastroUser() {
                 textoBotao: 'Confirmar cadastro',
                 aoReenviar: () => solicitarCadastroUser({ email: payload.email }),
                 aoConfirmar: async (codigo) => {
-                    await confirmarCadastroUser({ ...payload, codigo });
+                    await comCarregando(
+                        {
+                            titulo: 'Criando sua conta',
+                            mensagens: ['Validando o código…', 'Criando o seu perfil…', 'Quase lá…'],
+                        },
+                        () => confirmarCadastroUser({ ...payload, codigo })
+                    );
 
                     /* o back não devolve token no cadastro, então o próximo passo é entrar */
                     mostrarModalSucesso({
