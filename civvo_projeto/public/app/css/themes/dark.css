@@ -65,3 +65,9 @@ body.t-escuro { background: #000; }
 .t-escuro .cover { background: #2c4d5e; }
 .t-escuro .kcol, .t-escuro .nt.new, .t-escuro .lock { background: #1a2329; }
 .t-escuro .th.on > button:first-child { border-color: var(--acc); }
+
+/* ação destrutiva no tema escuro (vermelho claro, texto escuro no sólido) */
+.t-escuro .btn.danger { background: var(--bad); color: #000; }
+.t-escuro .btn.danger:hover { background: #fff; }
+.t-escuro .btn.ghost.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
+.t-escuro .btn.ghost.danger:hover { background: var(--bad); color: #000; }
