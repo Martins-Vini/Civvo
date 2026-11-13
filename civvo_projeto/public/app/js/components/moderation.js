@@ -9,6 +9,8 @@ const MOTIVOS = [
 ];
 
 function openReport(kind, id) {
+  if (!DEMO && kind != 'POST') return emBreve('Denunciar comentários estará disponível em breve.');
+
   const motivosHtml = MOTIVOS
     .map((m, i) => `<label class="rd"><input type="radio" name="mot" value="${i}" ${i ? '' : 'checked'}> ${m}</label>`)
     .join('');
@@ -30,7 +32,13 @@ async function sendReport(kind, id, btn) {
   const motivoTexto = MOTIVOS[m];
   const detalheTexto = $('#dt').value;
 
-  const ok = await comEspera(btn, 'Enviando…', () => {
+  const ok = await comEspera(btn, 'Enviando…', async () => {
+    /* modo real: o back registra só denúncia de publicação, com um único campo de motivo (até 225 caracteres) */
+    if (!DEMO) {
+      await API.denunciarPost(id, detalheTexto.trim() ? `${motivoTexto}: ${detalheTexto.trim()}` : motivoTexto);
+      return;
+    }
+
     REPORTS.push({
       id: Date.now(),
       kind,

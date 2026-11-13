@@ -185,9 +185,9 @@
   .side:not(.trava):hover .logo { font-size: 22px; }
   .side:has(:focus-visible) .logo { font-size: 22px; }
   .side-roles { display: none; }
-  .side .menub { display: flex; }
   .side:not(.trava):hover .side-roles { display: block; }
   .side:has(:focus-visible) .side-roles { display: block; }
-  .side:not(.trava):hover .menub { display: none; }
-  .side:has(:focus-visible) .menub { display: none; }
+  /* o botão "Menu" (hambúrguer) não aparece no painel de quem usa mouse, nem recolhido nem aberto; no celular continua o da barra superior,
+     e em telas de toque maiores (sem hover para abrir o painel) ele segue disponível */
+  .side .menub { display: none; }
 }

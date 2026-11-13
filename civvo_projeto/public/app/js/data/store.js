@@ -64,7 +64,9 @@ const ADMIN = {
   ongsAtivas: null 
 };
 
-const DEMO = true;
+/* DEMO quando a sessão foi criada com ?demo ou quando o app é aberto sem o bridge (sem sessão).
+   Sessão real (login no back) = DEMO desligado: sem latência simulada (ver src/bridge.js). */
+const DEMO = !window.__civvoSessao || !!window.__civvoSessao.demo;
 
 let MOSTRAR_SELETOR = true;
 

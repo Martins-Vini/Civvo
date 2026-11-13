@@ -19,6 +19,17 @@ V.doar = (id) => {
     );
   }
 
+  /* modo real: a doação usa o id da campanha (CAMPAIGN_DETAILS.id), que o feed do back ainda não envia,
+     e o pagamento ainda não passa por um gateway */
+  if (!DEMO) {
+    return shell(
+      `<div class="top"><h1>Fazer uma doação</h1></div>
+       <div class="card emp">As doações pelo app estarão disponíveis em breve.<br><br><a class="btn light sm" href="#/feed">Voltar ao feed</a></div>`,
+      'feed',
+      { rightCol: 0 }
+    );
+  }
+
   const c = p.camp;
   const free = USER.plano != 'GRATUITO';
 

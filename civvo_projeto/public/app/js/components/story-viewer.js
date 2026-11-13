@@ -63,7 +63,7 @@ function renderStory() {
         ${esc(it.caption || '')}
       </div>
       <div class="rp">
-        <input aria-label="Responder" placeholder="Responder…" onkeydown="if(event.key=='Enter'&&this.value.trim()){toast('Resposta enviada.');this.value=''}">
+        <input aria-label="Responder" placeholder="Responder…" onkeydown="if(event.key=='Enter'&&this.value.trim()){if(!DEMO){emBreve('Responder momentos estará disponível em breve.');return}toast('Resposta enviada.');this.value=''}">
         <button class="sh ${lk ? 'liked' : ''}" aria-label="Curtir" aria-pressed="${lk}" onclick="likeStory(this)">${ic('heart')}</button>
       </div>
       <div class="tz">
@@ -102,6 +102,7 @@ function pauseStory() {
 }
 
 function likeStory(b) {
+  if (!DEMO) return emBreve('Curtir momentos estará disponível em breve.');
   const k = SIDX + '-' + IIDX;
   STLIKE.has(k) ? STLIKE.delete(k) : STLIKE.add(k);
   b.classList.toggle('liked');

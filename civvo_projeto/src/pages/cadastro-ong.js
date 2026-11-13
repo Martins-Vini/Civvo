@@ -50,7 +50,7 @@ export function renderCadastroOng() {
             <span>Senha</span>
             <div class="password-input-wrapper" data-password-field>
               <input id="password" name="password" type="password" placeholder="Crie uma senha" autocomplete="new-password" aria-describedby="password-strength-text" data-password-strength-input required />
-              <button class="password-toggle" type="button" aria-label="Mostrar senha" aria-pressed="false">Mostrar</button>
+              <button class="password-toggle" type="button" aria-label="Mostrar senha" aria-pressed="false"></button>
             </div>
             <div class="password-strength" data-password-strength data-strength="none">
               <div class="password-strength-track" role="meter" aria-label="Força da senha" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0" aria-valuetext="Sem avaliação">

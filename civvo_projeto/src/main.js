@@ -1,5 +1,6 @@
 import { renderLoginUser } from './pages/login-user.js';
 import { renderLoginOng } from './pages/login-ong.js';
+import { renderLoginAdmin } from './pages/login-admin.js';
 import { renderCadastroUser } from './pages/cadastro-user.js';
 import { renderCadastroOng } from './pages/cadastro-ong.js';
 import paginaInicialSvg from './assets/pagina-inicial.svg';
@@ -30,6 +31,7 @@ const routes = {
   '#/inicio': renderPaginaInicial,
   '#/login-user': renderLoginUser,
   '#/login-ong': renderLoginOng,
+  '#/login-admin': renderLoginAdmin, /* sem link na tela inicial: acesso só pelo endereço */
   '#/cadastro-user': renderCadastroUser,
   '#/cadastro-ong': renderCadastroOng,
 };
