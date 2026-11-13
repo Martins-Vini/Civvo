@@ -64,8 +64,8 @@ V.planos = () => {
       let actionBtn = '';
       if (!on) {
         actionBtn = k == 'GRATUITO'
-          ? `<button class="btn ghost full" onclick="setPlano('GRATUITO', this)">Voltar ao gratuito</button>`
-          : `<button class="btn full" onclick="assinar('${k}', '${n}')">Assinar ${n}</button>`;
+          ? `<button class="btn ghost full" ${EB()} onclick="setPlano('GRATUITO', this)">Voltar ao gratuito</button>`
+          : `<button class="btn full" ${EB()} onclick="assinar('${k}', '${n}')">Assinar ${n}</button>`;
       }
 
       return `
@@ -95,6 +95,8 @@ V.planos = () => {
 };
 
 function assinar(k, n) {
+  if (!DEMO) return emBreve('Assinaturas estarão disponíveis em breve.');
+
   const pr = PRECOS[k];
   const priceNotice = pr != null 
     ? `Valor: <b>${money(pr)} / mês</b>.` 
@@ -112,6 +114,8 @@ function assinar(k, n) {
 }
 
 async function setPlano(k, btn) {
+  if (!DEMO) return emBreve('Assinaturas estarão disponíveis em breve.');
+
   const ok = await comEspera(btn, 'Processando…', () => {
     if (ROLE == 'ong') {
       ONG_PLANO = k;

@@ -27,8 +27,8 @@ export function rotaInicial(sessao) {
   return sessao?.perfil === PERFIS.ADMIN ? '#/admin' : '#/feed';
 }
 
-/* Lê o payload do JWT só para saber quando expira; quem valida a assinatura é o back. */
-function lerPayloadToken(token) {
+/* Lê o payload de um JWT (token do back ou credential do Google). Só decodifica: quem valida a assinatura é o back. */
+export function decodificarToken(token) {
   try {
     const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
     const json = decodeURIComponent(
@@ -46,7 +46,7 @@ function lerPayloadToken(token) {
 /* Sem token (modo demo) ou sem "exp" no token: não dá para saber, então deixa o back decidir. */
 export function tokenExpirado(token) {
   if (!token) return false;
-  const payload = lerPayloadToken(token);
+  const payload = decodificarToken(token);
   if (!payload?.exp) return false;
   return payload.exp * 1000 <= Date.now();
 }
@@ -57,7 +57,7 @@ const semVazios = (obj) =>
 /* Converte a resposta de login do back (user / ong / admin) no formato da sessão do app.
    - Doador: { user: { id, nome, apelido, avatar } }
    - ONG:    { ong: { id, ongProfileId, razaoSocial, nomeFantasia, cnpj } }
-   - Admin:  { admin: { id, nomeCompleto, cargo, roleLevel } }
+   - Admin:  { admin: { id, email, nome_completo, role_level } }
    `extras` completa o que o back não devolve (ex.: o e-mail digitado no login). */
 export function criarSessao(perfil, resposta = {}, extras = {}) {
   const token = resposta.token || null;
@@ -77,9 +77,10 @@ export function criarSessao(perfil, resposta = {}, extras = {}) {
     const a = resposta.admin || {};
     usuario = {
       id: a.id,
-      nome: a.nomeCompleto,
+      /* o back devolve snake_case (nome_completo, role_level) */
+      nome: a.nome_completo ?? a.nomeCompleto,
       cargo: a.cargo,
-      role_level: a.roleLevel,
+      role_level: a.role_level ?? a.roleLevel,
       email: extras.email,
     };
   } else {

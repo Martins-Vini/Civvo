@@ -41,7 +41,7 @@ export function renderLoginOng() {
             <span>Senha</span>
             <div class="password-input-wrapper" data-password-field>
               <input id="password" name="password" type="password" placeholder="Digite sua senha" autocomplete="current-password" required />
-              <button class="password-toggle" type="button" aria-label="Mostrar senha" aria-pressed="false">Mostrar</button>
+              <button class="password-toggle" type="button" aria-label="Mostrar senha" aria-pressed="false"></button>
             </div>
           </label>
 

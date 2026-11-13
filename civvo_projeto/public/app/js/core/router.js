@@ -55,4 +55,9 @@ if (window.__civvoSessao) {
   aplicarSessao(window.__civvoSessao);
 }
 
+/* sessão real: busca os dados no back já na abertura (o feed mostra o esqueleto até chegar) */
+if (!DEMO && (ROLE == 'doador' || ROLE == 'ong' || ROLE == 'admin')) {
+  carregarFeedReal();
+}
+
 go();

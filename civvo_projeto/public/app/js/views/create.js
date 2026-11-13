@@ -11,10 +11,11 @@ const CT = {
 };
 
 const meOng = () => {
-  let o = ONGS.find((x) => x.id == ME_ONG) || ONGS[0];
+  /* ME_ONG definido (sessão real) = nunca usar outra ONG como substituta; só o demo cai na primeira */
+  let o = ONGS.find((x) => x.id == ME_ONG) || (ME_ONG == null ? ONGS[0] : undefined);
   if (!o) {
     o = {
-      id: 0,
+      id: ME_ONG ?? 0,
       name: 'Sua ONG',
       cat: '',
       city: '',
@@ -62,8 +63,15 @@ function openCreate(t = 'POST') {
 
   const extraFields = (t == 'VOLUNTARIO' ? volFields() : '') + campFields;
 
-  const bottomContent = mom 
-    ? '<p style="color:var(--mut);font-size:12px;margin-top:10px">O momento fica visível por 24 horas.</p>' 
+ const bottomContent = mom 
+    ? (DEMO
+        ? '<p style="color:var(--mut);font-size:12px;margin-top:10px">O momento fica visível por 24 horas.</p>'
+        : `<label for="cDur">Duração</label>
+           <select id="cDur" class="in">
+             <option value="24">24 horas</option>
+             <option value="36">36 horas</option>
+             <option value="48">48 horas</option>
+           </select>`)
     : `<label for="cBoost">Impulsionar</label>
        <select id="cBoost" class="in">
          <option value="0">Não impulsionar</option>
@@ -72,18 +80,26 @@ function openCreate(t = 'POST') {
          <option value="30">30 dias</option>
        </select>`;
 
-  const submitBtn = t == 'VOLUNTARIO' && ONG_PLANO != 'PRO' 
+  const submitBtn = t == 'VOLUNTARIO' && semPro() 
     ? '' 
     : `<button class="btn full" onclick="publish('${t}', this)">Publicar ${CT[t][0].toLowerCase()}</button>`;
+
+  /* modo real: o banco guarda só o link da imagem (até 255 caracteres) e ainda não há upload de arquivos */
+  const mediaField = DEMO
+    ? `<label for="cMed">${mom ? 'Imagem do momento' : 'Imagens (até 10)'}</label>
+       <input id="cMed" type="file" accept="image/*" ${mom ? '' : 'multiple'} class="in" onchange="edAdd(this)">
+       <div id="edArea"></div>`
+    : `${mom
+         ? '<label for="cUrl">Link da imagem do momento</label><input id="cUrl" class="in" type="url" placeholder="https://…">'
+         : '<label for="cUrl">Links das imagens (opcional, um por linha, até 10)</label><textarea id="cUrl" class="in" rows="2" placeholder="https://…"></textarea>'}
+       <small style="color:var(--mut)">O envio de arquivos ainda não está disponível: cole o link (https) de uma imagem já hospedada.</small>`;
 
   openModal(
     `<h3>Criar</h3>
      <div class="seg" style="margin-bottom:8px">${segHtml}</div>
      <label for="cTxt">${mom ? 'Legenda' : 'Texto'}</label>
      <textarea id="cTxt" class="in" rows="${mom ? 2 : 4}" placeholder="${CT[t][1]}"></textarea>
-     <label for="cMed">${mom ? 'Imagem do momento' : 'Imagens (até 10)'}</label>
-     <input id="cMed" type="file" accept="image/*" ${mom ? '' : 'multiple'} class="in" onchange="edAdd(this)">
-     <div id="edArea"></div>
+     ${mediaField}
      ${extraFields}
      ${bottomContent}
      <div id="upc"></div>
@@ -221,7 +237,113 @@ function edOut(it) {
   return c.toDataURL('image/jpeg', 0.85);
 }
 
+/* Formatos de data do MySQL. Os prazos (só data) vão ao meio-dia para o dia não mudar por fuso horário ao voltar do back. */
+const sqlDia = (iso) => `${iso} 12:00:00`;
+const sqlAgora = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+
+/* Publicação real: monta o payload do back e envia (ver criarPost em src/services/api.js). */
+async function publishReal(t, btn) {
+  const txt = $('#cTxt').value.trim();
+  const e = $('#cerr');
+  const urls = ($('#cUrl').value || '').split(/\s+/).filter(Boolean);
+
+  if (urls.some((u) => !/^https:\/\/\S+$/i.test(u) || u.length > 255)) {
+    e.textContent = 'Use links de imagem começando com https:// (até 255 caracteres cada).';
+    return;
+  }
+  if (urls.length > 10) {
+    e.textContent = 'No máximo 10 imagens.';
+    return;
+  }
+  if (t == 'MOMENTO') {
+    if (urls.length != 1) {
+      e.textContent = 'Informe o link da imagem do momento.';
+      return;
+    }
+  } else if (!txt) {
+    e.textContent = 'Escreva o texto da publicação.';
+    return;
+  }
+
+  let caption = txt;
+  let campaignData = null;
+  let volunteerData = null;
+
+  if (t == 'VOLUNTARIO') {
+    const n = $('#cNec').value.trim();
+    const v = +$('#cVag').value;
+    const l = $('#cLimV').value;
+
+    if (!n) {
+      e.textContent = 'Descreva o que a ONG precisa.';
+      return;
+    }
+    if (!(v > 0)) {
+      e.textContent = 'Informe o número de vagas.';
+      return;
+    }
+    if (!l || l < hoje()) {
+      e.textContent = 'Escolha o fim das inscrições a partir de hoje.';
+      return;
+    }
+
+    /* o back não tem campos para "necessidades" e "modalidade": vão junto da legenda para não se perderem */
+    caption = `${txt}\n\nO que a ONG precisa: ${n}\nModalidade: ${$('#cLoc').value}`;
+    volunteerData = { vagas_disponiveis: v, data_limite_inscricao: sqlDia(l), google_forms_url: null };
+  }
+
+  if (t == 'CAMPANHA') {
+    const m = +$('#cMeta').value;
+    const l = $('#cLim').value;
+
+    if (!(m > 0)) {
+      e.textContent = 'Informe a meta da campanha.';
+      return;
+    }
+    if (!l || l < hoje()) {
+      e.textContent = 'Escolha um prazo a partir de hoje.';
+      return;
+    }
+    campaignData = { meta_valor: m, data_limite: sqlDia(l) };
+  }
+
+  const dias = t == 'MOMENTO' ? 0 : +$('#cBoost').value;
+
+  const ok = await comEspera(
+    btn,
+    'Publicando…',
+    async () => {
+      if (t == 'MOMENTO') {
+        await API.criarMomento({ media_url: urls[0], caption: txt, duracao_horas: +$('#cDur').value });
+      } else {
+        await API.criarPost({
+          type: t == 'VOLUNTARIO' ? 'VOLUNTARIADO' : t,
+          caption,
+          is_boosted: dias > 0,
+          boosted_until: dias > 0 ? sqlAgora(Date.now() + dias * 864e5) : null,
+          mediaList: urls.map((u) => ({ file_url: u, media_type: 'IMAGE' })),
+          campaignData,
+          volunteerData,
+        });
+      }
+
+      /* já publicou: se só a releitura falhar, o conteúdo aparece ao recarregar a página */
+      await atualizarFeedReal().catch((err) => console.error('Falha ao atualizar o feed:', err));
+    },
+    0
+  );
+
+  if (!ok) return;
+
+  closeModal();
+  toast(t == 'MOMENTO' ? 'Momento publicado.' : 'Publicado no feed.');
+  location.hash = '#/feed';
+  go();
+}
+
 async function publish(t, btn) {
+  if (!DEMO) return publishReal(t, btn);
+
   const txt = $('#cTxt').value.trim();
   const e = $('#cerr');
 
@@ -322,8 +444,11 @@ async function publish(t, btn) {
   go();
 }
 
+/* O login da ONG não traz o plano e o back não exige PRO para publicar vagas: a trava só vale no demo. */
+const semPro = () => DEMO && ONG_PLANO != 'PRO';
+
 const volFields = () =>
-  ONG_PLANO != 'PRO'
+  semPro()
     ? `<div class="lock">
          <b>Vagas de voluntariado</b>
          Publicar vagas com as necessidades da ONG é um recurso do plano PRO.<br>
@@ -344,4 +469,6 @@ const volFields = () =>
              <option>Híbrido</option>
            </select>
          </div>
-       </div>`;
+       </div>
+       ${DEMO ? '' : `<label for="cLimV">Inscrições até</label>
+       <input id="cLimV" class="in" type="date" min="${hoje()}">`}`;

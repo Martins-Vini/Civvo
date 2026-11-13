@@ -8,6 +8,12 @@ const isVol = (ongId, postId = null) => {
 
 async function volunteer(ongId, postId, btn) {
   postId = postId || null;
+
+  if (!DEMO) {
+    /* o back só aceita candidatura a uma vaga (post) e não tem rota para cancelar */
+    if (!postId) return emBreve('Candidate-se pelas vagas publicadas pela ONG.');
+    if (isVol(ongId, postId)) return toast('Você já se candidatou a esta vaga. Para cancelar, fale com a ONG.');
+  }
   
   const mine = (v) => 
     v.ong == ongId && v.post == postId && v.user == USER.apelido_unico;
@@ -39,7 +45,8 @@ async function volunteer(ongId, postId, btn) {
   marca();
 
   try {
-    await chamar(() => {
+    await chamar(async () => {
+      if (!DEMO) await API.candidatarVoluntariado(postId);
       if (!antes) {
         notify(
           'ong',
@@ -64,16 +71,23 @@ async function volunteer(ongId, postId, btn) {
     }
     
     marca();
-    toast('Não foi possível concluir. Tente de novo.');
+    toast(e.name == 'ApiError' && e.message ? e.message : 'Não foi possível concluir. Tente de novo.');
   }
 }
 
-const volBox = (p) => `
+const volBox = (p) => {
+  const v = p.vol;
+  const vagas = v.vagas == null ? 'Vagas abertas' : `${v.vagas} ${v.vagas > 1 ? 'vagas' : 'vaga'}`;
+  const resumo = [vagas, v.local && esc(v.local)].filter(Boolean).join(' · ');
+
+  return `
   <div class="vol">
-    <b>${p.vol.vagas} ${p.vol.vagas > 1 ? 'vagas' : 'vaga'} · ${esc(p.vol.local)}</b>
-    <p>${esc(p.vol.necessidades)}</p>
+    <b>${resumo}</b>
+    ${v.necessidades ? `<p>${esc(v.necessidades)}</p>` : ''}
+    ${v.ate ? `<small>Inscrições até ${esc(v.ate)}</small>` : ''}
   </div>
 `;
+};
 
 const volBtn = (p, o) => `
   <button 
