@@ -7,7 +7,7 @@ import * as api from './services/api.js';
 
 const BASE = import.meta.env?.BASE_URL ?? '/';
 
-const PUBLICAS = ['#/inicio', '#/login-user', '#/login-ong', '#/login-admin', '#/cadastro-user', '#/cadastro-ong'];
+const PUBLICAS = ['#/inicio', '#/login-user', '#/login-ong', '#/login-admin', '#/cadastro-user', '#/cadastro-ong', '#/redefinir-senha', '#/redefinir-senha-ong'];
 
 const areaPublica = document.getElementById('app');
 const areaLogada = document.getElementById('area-logada');

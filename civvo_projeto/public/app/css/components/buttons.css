@@ -69,3 +69,10 @@
   border: 1px solid var(--line);
   font-weight: 500;
 }
+
+/* Ação destrutiva (ex.: excluir conta). Sólido = confirmação; .ghost.danger = botão de entrada. */
+.btn.danger { background: var(--bad); color: #fff; }
+.btn.danger:hover { background: color-mix(in srgb, var(--bad) 82%, #000); }
+.btn.ghost.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
+.btn.ghost.danger:hover { background: var(--bad); color: #fff; }
+.btn.danger:disabled { opacity: .45; cursor: not-allowed; transform: none; }

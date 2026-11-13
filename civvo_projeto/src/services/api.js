@@ -109,6 +109,16 @@ export const verificarLoginUser = (payload) => apiRequest('/auth/login/verificar
 export const loginGoogle = (idToken, userType = 'DOADOR') =>
     apiRequest('/auth/google', { method: 'POST', dados: { idToken, userType } });
 
+/* ---- Recuperação de senha (doador e ONG: o back procura o e-mail direto na tabela USERS) ----
+   Etapa 1: envia um código de 6 dígitos para o e-mail. Body: { email }
+   Etapa 2: valida o código e troca a senha. Body: { email, codigo, novaSenha }
+   Erros do back chegam como { error }: e-mail não encontrado (404), código incorreto/expirado (400). */
+export const solicitarRecuperacaoSenha = (email) =>
+    apiRequest('/auth/password/solicitar', { method: 'POST', dados: { email } });
+
+export const confirmarRecuperacaoSenha = ({ email, codigo, novaSenha }) =>
+    apiRequest('/auth/password/confirmar', { method: 'POST', dados: { email, codigo, novaSenha } });
+
 /* ---- ONG: login e cadastro diretos ---- */
 export const loginOng = (payload) => apiRequest('/ong/login/ong', { method: 'POST', dados: payload });
 export const cadastrarOng = (payload) => apiRequest('/ong/register/ong', { method: 'POST', dados: payload });
@@ -164,6 +174,11 @@ export const doar = (payload) => doEnvio('POST', '/donations', payload);
 
 /* ---- Perfil do doador ---- Body (todos opcionais): { bio, banner_url, avatar_url, voluntariados_publicos, redes_sociais } */
 export const atualizarPerfilDoador = (payload) => doEnvio('PUT', '/donor/profile', payload);
+
+/* ---- Exclusão da própria conta (exige token) ----
+   O back faz exclusão lógica (USERS.is_active = FALSE) e responde { message }. Cada perfil tem a sua rota. */
+export const excluirContaDoador = () => doEnvio('DELETE', '/donor/account');
+export const excluirContaOng = () => doEnvio('DELETE', '/ong/account');
 
 /* ---- ONG ---- (o back só tem esta rota de perfil; não há edição de perfil de ONG) */
 export const perfilOng = () => doGet('/ong/perfil');

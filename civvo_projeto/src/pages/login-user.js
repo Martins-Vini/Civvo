@@ -41,7 +41,7 @@ export function renderLoginUser() {
             <input id="password" name="password" type="password" placeholder="Digite sua senha" autocomplete="current-password" required />
           </label>
 
-          <a href="#" class="forgot-password">Esqueceu sua senha?</a>
+          <a href="#/redefinir-senha" class="forgot-password">Esqueceu sua senha?</a>
 
           <button type="submit" class="auth-button">Entrar</button>
 
