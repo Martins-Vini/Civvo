@@ -45,7 +45,7 @@ export function renderLoginOng() {
             </div>
           </label>
 
-          <a href="#" class="forgot-password">Esqueceu sua senha?</a>
+          <a href="#/redefinir-senha-ong" class="forgot-password">Esqueceu sua senha?</a>
 
           <button type="submit" class="auth-button">Entrar</button>
         </form>
