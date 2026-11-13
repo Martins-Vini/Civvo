@@ -28,7 +28,7 @@ const postH = (p) => {
         ${av(o.name, o.h)}
         <div>
           <b>${esc(o.name)} ${o.ver ? VER : ''}</b>
-          <small>${esc(p.time)}${p.edited ? ' · editado' : ''} · ${esc(o.cat)}</small>
+          <small>${esc(p.time)}${p.edited ? ' · editado' : ''}${o.cat ? ' · ' + esc(o.cat) : ''}</small>
         </div>
         <span class="tag">${postTag(p)}</span>
         ${actionLink}
@@ -81,7 +81,12 @@ async function likePost(id) {
   pintaLike(p, !l, n + (l ? -1 : 1));
 
   try {
-    await chamar(null, 250);
+    const r = await chamar(real(() => API.curtirPost(id)), 250);
+
+    /* o back responde { liked }: se divergir do que pintamos (ex.: curtida feita em outro aparelho), acerta pela resposta */
+    if (r && typeof r.liked == 'boolean' && r.liked !== !l) {
+      pintaLike(p, r.liked, n - (l ? 1 : 0) + (r.liked ? 1 : 0));
+    }
   } catch (e) {
     pintaLike(p, l, n);
     toast('Não foi possível curtir. Tente de novo.');
@@ -93,9 +98,12 @@ async function likePost(id) {
 const boostBtn = (p) =>
   p.boosted
     ? `<span class="tag">Impulsionado até ${esc(p.boostEnd || '')}</span>`
-    : `<button class="btn sm" onclick="openBoost(${p.id})">Add Impulso</button>`;
+    : `<button class="btn sm" ${EB()} onclick="openBoost(${p.id})">Add Impulso</button>`;
 
 function openBoost(id) {
+  /* o back só aceita o impulso na criação do post (is_boosted); não há rota para impulsionar depois */
+  if (!DEMO) return emBreve('Impulsionar depois de publicar estará disponível em breve. Use a opção ao criar o post.');
+
   const radiosHtml = [7, 15, 30]
     .map((d, i) => `<label class="rd"><input type="radio" name="bd" value="${d}" ${i ? '' : 'checked'}> ${d} dias</label>`)
     .join('');
@@ -144,6 +152,11 @@ async function sharePost(id) {
   const o = ong(p.ong);
   const url = location.href.split('#')[0] + '#/post/' + p.id;
 
+  /* conta o compartilhamento no back (só no modo real); falha aqui não atrapalha a pessoa */
+  const registrar = () => {
+    if (!DEMO) API.compartilharPost(id).catch(() => {});
+  };
+
   try {
     if (navigator.share) {
       await navigator.share({ 
@@ -151,9 +164,11 @@ async function sharePost(id) {
         text: p.text.slice(0, 100), 
         url 
       });
+      registrar();
       return;
     }
     await navigator.clipboard.writeText(url);
+    registrar();
     toast('Link copiado.');
   } catch (e) {
     if (e.name != 'AbortError') {

@@ -3,6 +3,8 @@
 const nomeDoador = () => `${USER.nome} ${USER.sobrenome}`.trim();
 
 const toggleSet = async (S, id) => {
+  if (!DEMO && S === FOLLOW) return emBreve('Seguir ONGs estará disponível em breve.');
+
   const had = S.has(id);
   had ? S.delete(id) : S.add(id);
   go();
@@ -95,11 +97,14 @@ V.perfil = () => {
     </a>
   `).join('') || '<p class="emp">Você ainda não fez nenhuma doação.</p>';
 
-  const sections = [
-    ['Causas de interesse', causasContent, 0],
-    ['ONGs apoiadas', apoiosContent, 1],
-    ['Histórico de doações', doacoesContent, 0],
-  ];
+  /* modo real: o back não guarda causas de interesse nem lista doações do usuário */
+  const sections = DEMO
+    ? [
+        ['Causas de interesse', causasContent, 0],
+        ['ONGs apoiadas', apoiosContent, 1],
+        ['Histórico de doações', doacoesContent, 0],
+      ]
+    : [['Histórico de doações', '<p class="emp">O histórico de doações estará disponível em breve.</p>', 0]];
 
   const meta = [
     [ap, 'doações aprovadas'],
@@ -117,7 +122,7 @@ V.perfil = () => {
       sections,
       owner,
       USER.social,
-      '',
+      USER.banner_url || '',
       USER.avatar_url
     ),
     'perfil',
@@ -210,8 +215,8 @@ V.ong = (id, sec = 'sobre') => {
     ? '<div class="acts"><a class="btn ghost sm" href="#/editar-perfil">Editar perfil</a></div>'
     : `<div class="acts">
          <a class="btn sm" href="${op ? '#/doar/' + op.id : '#'}" ${op ? '' : 'aria-disabled="true"'}>Doar</a>
-         <button class="btn light sm" aria-pressed="${f}" onclick="toggleSet(FOLLOW, ${o.id})">${f ? 'Seguindo' : 'Seguir'}</button>
-         <button class="btn ghost sm" data-on="Candidatura enviada" data-off="Quero ser voluntário" aria-pressed="${v}" onclick="volunteer(${o.id}, null, this)">${v ? 'Candidatura enviada' : 'Quero ser voluntário'}</button>
+         <button class="btn light sm" ${EB()} aria-pressed="${f}" onclick="toggleSet(FOLLOW, ${o.id})">${f ? 'Seguindo' : 'Seguir'}</button>
+         <button class="btn ghost sm" ${EB()} data-on="Candidatura enviada" data-off="Quero ser voluntário" aria-pressed="${v}" onclick="volunteer(${o.id}, null, this)">${v ? 'Candidatura enviada' : 'Quero ser voluntário'}</button>
          <a class="btn ghost sm" href="#/chats">Mensagem</a>
        </div>`;
 

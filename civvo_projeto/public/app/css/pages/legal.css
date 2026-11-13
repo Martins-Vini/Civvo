@@ -4,5 +4,10 @@
 .lg-c { width: min(760px, 100%); padding: 28px; position: relative; z-index: 1; }
 .lg-c h1 { font-size: 26px; margin-bottom: 8px; }
 .lg-c h2 { font-size: 16px; margin: 22px 0 6px; }
-.lg-c p { color: var(--ink); line-height: 1.6; }
+.lg-c p { color: var(--ink); line-height: 1.6; margin: 0 0 10px; }
 .lg-c .lg-n { color: var(--mut); font-size: 13px; margin: 8px 0; }
+.lg-c .lg-d { color: var(--mut); font-size: 13px; margin: 0 0 14px; }
+.lg-c h3 { font-size: 14px; margin: 16px 0 4px; color: var(--ink-g); }
+.lg-c ul { margin: 6px 0 10px; padding-left: 20px; }
+.lg-c li { margin: 6px 0; color: var(--ink); line-height: 1.6; }
+.lg-c a { color: var(--pri); text-decoration: underline; }

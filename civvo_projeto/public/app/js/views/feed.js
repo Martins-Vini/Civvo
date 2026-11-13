@@ -4,10 +4,14 @@ const emptySt = () =>
   '<div class="st" aria-hidden="true"><div class="ring e"></div></div>'.repeat(5);
 
 const skel = () => {
-  setTimeout(() => {
-    FEED = 1;
-    go();
-  }, 700);
+  if (DEMO) {
+    setTimeout(() => {
+      FEED = 1;
+      go();
+    }, 700);
+  } else {
+    carregarFeedReal();
+  }
 
   const storiesSkel = '<div class="st"><div class="sk av" style="width:64px;height:64px"></div></div>'.repeat(5);
   const postsSkel = '<div class="card post" style="padding:16px" aria-busy="true"><div class="sk" style="height:18px;width:40%;margin-bottom:14px"></div><div class="sk" style="aspect-ratio:16/10"></div><div class="sk" style="height:14px;width:70%;margin-top:14px"></div></div>'.repeat(2);
@@ -20,8 +24,18 @@ const skel = () => {
   );
 };
 
+const feedErro = () =>
+  shell(
+    `<div class="top"><h2>Momentos</h2></div>
+     <div class="card emp" role="alert">
+       <p>${esc(FEED_ERRO)}</p>
+       <button class="btn sm" onclick="recarregarFeed()">Tentar de novo</button>
+     </div>`,
+    'feed'
+  );
+
 V.feed = () => {
-  if (!FEED) return skel();
+  if (!FEED) return FEED_ERRO ? feedErro() : skel();
 
   const isOng = ROLE == 'ong';
   const createBtn = isOng ? '<button class="btn sm desk" onclick="openCreate()">Criar conteúdo</button>' : '';

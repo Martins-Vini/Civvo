@@ -24,6 +24,9 @@ function aplicarSessao(s) {
   }
 
   if (s.perfil == 'ong') {
+    /* o feed usa o id do perfil da ONG (ONGS_PROFILES.id), não o id do usuário */
+    if (u.ong_profile_id != null) ME_ONG = u.ong_profile_id;
+
     Object.assign(meOng(), so({
       name: u.nome_fantasia || u.organizationName || u.nome || u.name,
       handle: u.handle || u.apelido,

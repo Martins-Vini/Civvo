@@ -60,7 +60,121 @@ function pickImg(i) {
   r.readAsDataURL(f);
 }
 
+/* ---- Modo real ----
+   O back só aceita, para o doador, bio, foto, banner, voluntariados públicos e redes sociais (PUT /donor/profile)
+   e ainda não tem rota para ler o perfil nem para editar ONG. Como o app não sabe o que já está salvo,
+   campo em branco significa "manter como está" e só o que mudou é enviado. */
+const httpsOk = (u) => /^https:\/\/\S+$/i.test(u) && u.length <= 255;
+
+function editarPerfilReal() {
+  if (ROLE == 'ong') {
+    return shell(
+      `<div class="top"><h1>Editar perfil</h1></div>
+       <div class="card emp">A edição do perfil da ONG estará disponível em breve.<br><br><a class="btn light sm" href="#/perfil">Voltar</a></div>`,
+      'perfil',
+      { rightCol: 0 }
+    );
+  }
+
+  const s = USER.social || {};
+  const redes = NET.map(([k, n]) => F('eS_' + k, n, s[k] || '', 'url', 'placeholder="https://"')).join('');
+
+  const content = `
+    <div class="top"><h1>Editar perfil</h1></div>
+    ${grp(
+      'Dados',
+      TA('eBio', 'Bio', USER.bio || '', 4) +
+        '<small style="color:var(--mut)">Em branco = manter a bio atual.</small>' +
+        F('eAva', 'Link da foto de perfil (https)', USER.avatar_url || '', 'url', 'placeholder="https://"') +
+        F('eBan', 'Link do banner (https)', USER.banner_url || '', 'url', 'placeholder="https://"') +
+        '<small style="color:var(--mut)">O envio de arquivos ainda não está disponível. Em branco = manter a imagem atual.</small>'
+    )}
+    ${grp(
+      'Privacidade',
+      `<label for="eVolPub">Voluntariados no perfil público</label>
+       <select id="eVolPub" class="in">
+         <option value="">Manter como está</option>
+         <option value="1">Mostrar</option>
+         <option value="0">Ocultar</option>
+       </select>`
+    )}
+    ${grp(
+      'Redes sociais',
+      redes +
+        '<small style="color:var(--mut)">Ao salvar, estes links substituem as redes sociais salvas antes.</small>'
+    )}
+    <div class="card set">
+      <small style="color:var(--mut)">Nome, apelido, CPF, endereço, telefone e causas de interesse ainda não podem ser alterados por aqui.</small>
+    </div>
+    <p class="dn-err" id="eerr" role="alert"></p>
+    <div class="acts">
+      <button class="btn" onclick="saveProfile(this)">Salvar alterações</button>
+      <a class="btn ghost" href="#/perfil">Cancelar</a>
+    </div>
+  `;
+
+  return shell(content, 'perfil', { rightCol: 0 });
+}
+
+async function saveProfileReal(btn) {
+  const v = (id) => ($('#' + id)?.value || '').trim();
+  const e = $('#eerr');
+  const dados = {};
+
+  if (v('eBio') && v('eBio') != (USER.bio || '')) dados.bio = v('eBio');
+
+  for (const [id, campo, nome] of [
+    ['eAva', 'avatar_url', 'da foto'],
+    ['eBan', 'banner_url', 'do banner'],
+  ]) {
+    const u = v(id);
+    if (!u || u == (USER[campo] || '')) continue;
+    if (!httpsOk(u)) {
+      e.textContent = `O link ${nome} deve começar com https:// e ter até 255 caracteres.`;
+      return;
+    }
+    dados[campo] = u;
+  }
+
+  if (v('eVolPub')) dados.voluntariados_publicos = v('eVolPub') == '1';
+
+  const social = {};
+  let mudouSocial = false;
+  for (const [k, n] of NET) {
+    const u = v('eS_' + k);
+    if (u && !safeUrl(u)) {
+      e.textContent = `Link do ${n} inválido. Comece com https://`;
+      return;
+    }
+    social[k] = u;
+    if (u != ((USER.social || {})[k] || '')) mudouSocial = true;
+  }
+  if (mudouSocial) dados.redes_sociais = social;
+
+  if (!Object.keys(dados).length) {
+    e.textContent = 'Nenhuma alteração para salvar.';
+    return;
+  }
+
+  const ok = await comEspera(btn, 'Salvando…', async () => {
+    await API.atualizarPerfilDoador(dados);
+
+    /* só depois de o back confirmar */
+    if (dados.bio !== undefined) USER.bio = dados.bio;
+    if (dados.avatar_url) USER.avatar_url = dados.avatar_url;
+    if (dados.banner_url) USER.banner_url = dados.banner_url;
+    if (dados.redes_sociais) USER.social = dados.redes_sociais;
+  });
+
+  if (!ok) return;
+
+  toast('Perfil atualizado.');
+  location.hash = '#/perfil';
+}
+
 V['editar-perfil'] = () => {
+  if (!DEMO) return editarPerfilReal();
+
   EP = {};
   const ong = ROLE == 'ong';
   const o = ong ? meOng() : null;
@@ -144,6 +258,8 @@ V['editar-perfil'] = () => {
 };
 
 async function saveProfile(btn) {
+  if (!DEMO) return saveProfileReal(btn);
+
   const v = (id) => ($('#' + id)?.value || '').trim();
   const e = $('#eerr');
   const ong = ROLE == 'ong';

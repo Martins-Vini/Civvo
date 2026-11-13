@@ -6,7 +6,8 @@ function managePost(id) {
   const p = POSTS.find((x) => x.id == id);
   const c = p.camp;
 
-  const btnToggleCamp = c 
+  /* o back não tem rota para encerrar/reabrir campanha */
+  const btnToggleCamp = c && DEMO
     ? `<button class="btn light" onclick="toggleCamp(${id})">
         ${c.status == 'ENCERRADA' ? 'Reabrir campanha' : 'Encerrar campanha'}
        </button>` 
@@ -28,7 +29,8 @@ function editPost(id) {
   const c = p.camp;
   const v = p.vol;
 
-  const campFields = c ? `
+  /* modo real: o back só altera a legenda; meta, prazo e vagas não mudam depois de publicar */
+  const campFields = c && DEMO ? `
     <div class="row2">
       <div>
         <label for="eMeta">Meta (R$)</label>
@@ -45,7 +47,7 @@ function editPost(id) {
     .map((x) => `<option ${x == v?.local ? 'selected' : ''}>${x}</option>`)
     .join('');
 
-  const volFields = v ? `
+  const volFields = v && DEMO ? `
     <label for="eNec">O que a ONG precisa</label>
     <textarea id="eNec" class="in" rows="3">${esc(v.necessidades)}</textarea>
     <div class="row2">
@@ -66,7 +68,7 @@ function editPost(id) {
      <textarea id="eTxt" class="in" rows="4">${esc(p.text)}</textarea>
      ${campFields}
      ${volFields}
-     <small style="color:var(--mut)">As imagens não podem ser alteradas depois de publicar.</small>
+     <small style="color:var(--mut)">${DEMO ? 'As imagens não podem ser alteradas depois de publicar.' : 'Só o texto pode ser alterado depois de publicar (imagens, meta, prazo e vagas não).'}</small>
      <p class="dn-err" id="eeE" role="alert"></p>
      <button class="btn full" onclick="savePostEdit(${id}, this)">Salvar alterações</button>`,
     'Editar'
@@ -84,7 +86,7 @@ async function savePostEdit(id, btn) {
     return;
   }
 
-  if (p.camp) {
+  if (p.camp && DEMO) {
     const m = +$('#eMeta').value;
     const l = $('#eLim').value;
 
@@ -107,7 +109,7 @@ async function savePostEdit(id, btn) {
     p.camp.limite = dataBR(l);
   }
 
-  if (p.vol) {
+  if (p.vol && DEMO) {
     const n = $('#eNec').value.trim();
     const v = +$('#eVag').value;
 
@@ -123,7 +125,8 @@ async function savePostEdit(id, btn) {
     });
   }
 
-  const ok = await comEspera(btn, 'Salvando…', () => {
+  const ok = await comEspera(btn, 'Salvando…', async () => {
+    if (!DEMO) await API.editarPost(id, t);
     p.text = t;
     p.edited = true;
     audit('UPDATE', 'posts', `Publicação #${String(id).slice(-4)} editada.`);
@@ -137,6 +140,8 @@ async function savePostEdit(id, btn) {
 }
 
 function toggleCamp(id) {
+  if (!DEMO) return emBreve('Encerrar ou reabrir campanhas estará disponível em breve.');
+
   const c = POSTS.find((x) => x.id == id).camp;
 
   c.status = c.status == 'ENCERRADA' 
@@ -162,14 +167,14 @@ function askDelete(id) {
   const p = POSTS.find((x) => x.id == id);
 
   if (p.camp && p.camp.atual > 0) {
-    const btnEncerrar = p.camp.status == 'ENCERRADA' 
+ const btnEncerrar = p.camp.status == 'ENCERRADA' || !DEMO
       ? '' 
       : `<button class="btn full" onclick="toggleCamp(${id})">Encerrar campanha</button>`;
 
     openModal(
       `<h3>Não é possível excluir</h3>
        <p style="margin:8px 0 16px">
-         Esta campanha já recebeu ${money(p.camp.atual)} em doações aprovadas. Para manter a transparência, encerre a campanha em vez de excluí-la.
+         Esta campanha já recebeu ${money(p.camp.atual)} em doações aprovadas. Para manter a transparência, ${DEMO ? 'encerre a campanha em vez de excluí-la.' : 'ela não pode ser excluída.'}
        </p>
        ${btnEncerrar}`,
       'Excluir'
@@ -186,7 +191,15 @@ function askDelete(id) {
 }
 
 async function delPost(id, btn) {
-  const ok = await comEspera(btn, 'Excluindo…', () => {
+  const ok = await comEspera(btn, 'Excluindo…', async () => {
+    if (!DEMO) {
+      await API.excluirPost(id);
+      /* o back responde sucesso mesmo quando não consegue apagar: confere recarregando */
+      await atualizarFeedReal();
+      if (POSTS.some((x) => x.id == id)) throw new ApiError('Não foi possível excluir a publicação.');
+      return;
+    }
+
     POSTS.splice(
       POSTS.findIndex((x) => x.id == id),
       1

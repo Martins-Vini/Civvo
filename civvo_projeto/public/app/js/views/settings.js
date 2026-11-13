@@ -34,6 +34,7 @@ const pixOk = (t, v) => {
 };
 
 function addPix() {
+  if (!DEMO) return emBreve('Cadastro de chaves Pix estará disponível em breve.');
   const optionsHtml = PIX_T.map((t) => `<option>${t}</option>`).join('');
   
   openModal(
@@ -73,6 +74,7 @@ async function savePix(btn) {
 }
 
 function addCard() {
+  if (!DEMO) return emBreve('Cadastro de cartões estará disponível em breve.');
   openModal(
     `<h3>Adicionar cartão de crédito</h3>
      <label for="cdN">Nome no cartão</label>
@@ -148,6 +150,7 @@ async function saveCard(btn) {
 }
 
 function delPay(k, id) {
+  if (!DEMO) return emBreve('Meios de pagamento estarão disponíveis em breve.');
   const a = USER[k];
   a.splice(a.findIndex((x) => x.id == id), 1);
   go();
@@ -176,7 +179,7 @@ V.config = () => {
           <small>${pixList}</small>
           ${pixRows}
         </div>
-        <button class="btn light sm" onclick="addPix()">Adicionar</button>
+        <button class="btn light sm" ${EB()} onclick="addPix()">Adicionar</button>
       </div>
       <div class="srow">
         <div>
@@ -184,7 +187,7 @@ V.config = () => {
           <small>${cardList}</small>
           ${cardRows}
         </div>
-        <button class="btn light sm" onclick="addCard()">Adicionar</button>
+        <button class="btn light sm" ${EB()} onclick="addCard()">Adicionar</button>
       </div>
     </div>
     <div class="card set">
