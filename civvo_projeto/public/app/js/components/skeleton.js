@@ -77,7 +77,7 @@ const CMT_OK = new Set();
 
 function cmtsInicial(pid) {
   if (!DEMO || LATENCIA.max <= 0 || CMT_OK.has(pid)) {
-    return nest(pid) || '<p class="emp">Seja o primeiro a comentar.</p>';
+    return nest(pid) || semComentarios();
   }
 
   chamar().then(() => {

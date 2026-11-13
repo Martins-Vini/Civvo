@@ -3,6 +3,12 @@
 let RPL = null;
 let CURPOST = 0;
 
+/* modo real: o back ainda não lista os comentários de uma publicação, só recebe novos */
+const semComentarios = () =>
+  DEMO
+    ? '<p class="emp">Seja o primeiro a comentar.</p>'
+    : '<p class="emp">Os comentários de outras pessoas ainda não podem ser exibidos aqui. Você já pode comentar.</p>';
+
 const bump = (p, n) => {
   p.comments = Math.max(0, p.comments + n);
   document
@@ -30,6 +36,7 @@ const quem = () => {
 };
 
 const canDelComment = (pid) => {
+  if (!DEMO) return false; /* o back não tem rota para excluir comentário */
   const p = POSTS.find((x) => x.id == pid);
   return ROLE == 'ong' && !!p && p.ong == ME_ONG;
 };
@@ -69,7 +76,7 @@ const nest = (pid, parent = null, d = 0) => {
             <small style="color:var(--mut)">${esc(dia(c.time))}</small>
             <p>${esc(c.text)}</p>
             <button class="lk" style="margin:0 12px 0 0" onclick="replyTo(${c.id})">Responder</button>
-            <button class="lk" style="margin:0 12px 0 0" onclick="openReport('COMMENT', ${c.id})">Denunciar</button>
+            ${DEMO ? `<button class="lk" style="margin:0 12px 0 0" onclick="openReport('COMMENT', ${c.id})">Denunciar</button>` : ''}
             ${delBtn}
           </div>
         </div>
@@ -82,7 +89,7 @@ const nest = (pid, parent = null, d = 0) => {
 function drawComments(pid) {
   if (!$('#cmts')) return;
   
-  $('#cmts').innerHTML = nest(pid) || '<p class="emp">Seja o primeiro a comentar.</p>';
+  $('#cmts').innerHTML = nest(pid) || semComentarios();
   
   const r = $('#rpl');
   r.hidden = !RPL;
@@ -106,9 +113,12 @@ async function addComment(pid, btn) {
   const par = RPL ? RPL.id : null;
   btn = btn || i.nextElementSibling;
 
-  const ok = await comEspera(btn, 'Enviando…', () => {
+  const ok = await comEspera(btn, 'Enviando…', async () => {
+    /* modo real: o back devolve o id do comentário (usado nas respostas) */
+    const r = DEMO ? null : await API.comentarPost(pid, t, par);
+
     COMMENTS.push({
-      id: Date.now(),
+      id: r?.commentId ?? Date.now(),
       post: pid,
       parent: par,
       user: w.user,

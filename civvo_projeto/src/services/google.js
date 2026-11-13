@@ -1,7 +1,9 @@
 /* Login/cadastro com Google (Google Identity Services).
-   O back (POST /api/auth/google) espera o ID token do Google no campo "token" e valida com GOOGLE_CLIENT_ID,
-   por isso usamos o botão oficial do Google, que devolve esse ID token (credential).
+   O back (POST /api/auth/google) espera o ID token do Google no campo "idToken" (junto com userType) e valida com
+   GOOGLE_CLIENT_ID, por isso usamos o botão oficial do Google, que devolve esse ID token (credential).
    Requer VITE_GOOGLE_CLIENT_ID no .env do front (o MESMO client id configurado no back). */
+
+import { decodificarToken } from './sessao.js';
 
 export const GOOGLE_CLIENT_ID = import.meta.env?.VITE_GOOGLE_CLIENT_ID || '';
 
@@ -29,18 +31,19 @@ function carregarGsi() {
     return carregando;
 }
 
-/* Lê só o e-mail do ID token (para guardar na sessão). Quem valida a assinatura é o back. */
-export function emailDoCredential(credential) {
-    try {
-        const base64 = credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-        const json = decodeURIComponent(
-            atob(base64).split('').map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join('')
-        );
-        return JSON.parse(json).email;
-    } catch {
-        return undefined;
-    }
+/* Lê os dados da pessoa no ID token do Google (para montar a sessão, já que o back só devolve o token).
+   Quem valida a assinatura é o back. */
+export function dadosDoCredential(credential) {
+    const p = decodificarToken(credential) || {};
+    return {
+        email: p.email,
+        nome: p.given_name || p.name,
+        sobrenome: p.family_name || '',
+        avatar: p.picture,
+    };
 }
+
+export const emailDoCredential = (credential) => dadosDoCredential(credential).email;
 
 /* Troca o botão "de enfeite" por um funcional: o botão oficial do Google é renderizado invisível
    por cima do botão estilizado da Civvo, então o visual continua o mesmo e o clique abre o popup do Google.

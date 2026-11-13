@@ -3,10 +3,11 @@
 import './main.js';
 import { lerSessao, salvarSessao, limparSessao, rotaInicial, tokenExpirado } from './services/sessao.js';
 import { mostrarModalCarregando } from './pages/modal-carregando.js';
+import * as api from './services/api.js';
 
 const BASE = import.meta.env?.BASE_URL ?? '/';
 
-const PUBLICAS = ['#/inicio', '#/login-user', '#/login-ong', '#/cadastro-user', '#/cadastro-ong'];
+const PUBLICAS = ['#/inicio', '#/login-user', '#/login-ong', '#/login-admin', '#/cadastro-user', '#/cadastro-ong'];
 
 const areaPublica = document.getElementById('app');
 const areaLogada = document.getElementById('area-logada');
@@ -21,6 +22,8 @@ export const sessao = {
   sair: limparSessao,
 };
 window.CivvoSessao = sessao;
+/* O app logado (public/app, scripts sem módulos) chama o back por aqui: window.CivvoApi.listarFeed(), etc. */
+window.CivvoApi = api;
 
 const modoDemo = () => new URLSearchParams(location.search).has('demo') || import.meta.env?.VITE_DEMO === 'true';
 

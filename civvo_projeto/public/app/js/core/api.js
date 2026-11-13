@@ -1,5 +1,20 @@
 /* Camada única para falar com a API: carregamento, envio e falha.
-   Em DEMO ela simula a latência da rede. Ao integrar o back-end, troque o corpo de chamar() por fetch() e o resto continua igual. */
+   Em DEMO ela simula a latência da rede. Fora do DEMO, chamar() só executa a ação.
+   As rotas do back ficam em API (= window.CivvoApi, de src/services/api.js), ex.:
+     comEspera(btn, 'Enviando…', () => API.curtirPost(id))
+   Erros do back chegam como ApiError (name 'ApiError') e a mensagem dele é mostrada ao usuário. */
+
+const API = window.CivvoApi || {};
+const ApiError = API.ApiError || Error;
+
+/* Chamada ao back só no modo real: no demo devolve null e chamar() só simula a espera.
+   Uso: chamar(real(() => API.curtirPost(id)), 250) */
+const real = (fn) => (DEMO ? null : fn);
+
+/* Recurso que ainda não tem rota no back: no modo real não finge que funciona.
+   emBreve() mostra o aviso; EB() desabilita o botão (no demo não muda nada). */
+const emBreve = (txt) => toast(txt || 'Este recurso estará disponível em breve.');
+const EB = () => (DEMO ? '' : 'disabled aria-disabled="true" title="Em breve"');
 
 const LATENCIA = { 
   min: 350, 
@@ -40,7 +55,11 @@ async function comEspera(btn, texto, acao, ms) {
     return true;
   } catch (e) {
     toast(
-      e.name == 'AbortError' ? 'Envio cancelado.' : 'Não foi possível concluir. Tente novamente.'
+      e.name == 'AbortError'
+        ? 'Envio cancelado.'
+        : e.name == 'ApiError' && e.message
+          ? e.message
+          : 'Não foi possível concluir. Tente novamente.'
     );
     return false;
   } finally {
