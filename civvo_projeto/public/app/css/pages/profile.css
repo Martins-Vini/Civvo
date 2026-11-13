@@ -81,3 +81,14 @@
 .tabc { padding-top: 16px; }
 .kv { padding: 10px 0; border-top: 1px solid var(--line); }
 .kv small { display: block; color: var(--mut); }
+
+/* Excluir conta (fim do perfil de doador e de ONG). */
+.danger-zone {
+  margin-top: 28px;
+  padding: 16px;
+  border: 1.5px solid color-mix(in srgb, var(--bad) 45%, transparent);
+  border-radius: 12px;
+}
+
+.danger-zone h4 { color: var(--bad); margin-bottom: 4px; }
+.danger-zone p { color: var(--mut); font-size: 13px; margin: 0 0 12px; }

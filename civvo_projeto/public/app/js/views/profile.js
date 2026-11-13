@@ -106,6 +106,8 @@ V.perfil = () => {
       ]
     : [['Histórico de doações', '<p class="emp">O histórico de doações estará disponível em breve.</p>', 0]];
 
+  sections.push(['', blocoExcluirConta(), 0]);
+
   const meta = [
     [ap, 'doações aprovadas'],
     [USER.apoios.length, 'ONGs apoiadas'],
@@ -231,6 +233,8 @@ V.ong = (id, sec = 'sobre') => {
   const sections = [
     ['', tabs + `<div class="tabc">${ongTab(o, sec, ps)}</div>`, 0],
   ];
+
+  if (me && ROLE == 'ong') sections.push(['', blocoExcluirConta(), 0]);
 
   return shell(
     profile(

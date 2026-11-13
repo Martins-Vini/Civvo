@@ -3,6 +3,7 @@ import { renderLoginOng } from './pages/login-ong.js';
 import { renderLoginAdmin } from './pages/login-admin.js';
 import { renderCadastroUser } from './pages/cadastro-user.js';
 import { renderCadastroOng } from './pages/cadastro-ong.js';
+import { renderRedefinirSenha } from './pages/redefinir-senha.js';
 import paginaInicialSvg from './assets/pagina-inicial.svg';
 import logoCivvoSvg from './assets/logo-civvo.svg';
 
@@ -34,6 +35,8 @@ const routes = {
   '#/login-admin': renderLoginAdmin, /* sem link na tela inicial: acesso só pelo endereço */
   '#/cadastro-user': renderCadastroUser,
   '#/cadastro-ong': renderCadastroOng,
+  '#/redefinir-senha': () => renderRedefinirSenha('user'),
+  '#/redefinir-senha-ong': () => renderRedefinirSenha('ong'),
 };
 
 function renderCurrentRoute() {
