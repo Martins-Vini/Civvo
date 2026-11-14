@@ -8,6 +8,11 @@ const postH = (p) => {
   const pct = c && c.meta ? Math.min(100, (c.atual / c.meta) * 100) : 0;
   const isOwnPost = ROLE == 'ong' && p.ong == ME_ONG;
 
+  const seguindo = FOLLOW.has(o.id);
+  const seguirBtn = isOwnPost || ROLE == 'admin'
+    ? ''
+    : `<button class="lk fo" data-fo="${o.id}" aria-pressed="${seguindo}" onclick="seguirOngClick(${o.id}, this)">${seguindo ? 'Seguindo' : 'Seguir'}</button>`;
+
   const actionLink = isOwnPost 
     ? `<button class="lk" onclick="managePost(${p.id})">Gerenciar</button>` 
     : `<button class="lk" aria-label="Denunciar publicação" onclick="openReport('POST', ${p.id})">Denunciar</button>`;
@@ -25,9 +30,9 @@ const postH = (p) => {
   return `
     <article class="card post" data-p="${p.id}">
       <div class="ph">
-        ${av(o.name, o.h)}
+        <a href="#/ong/${o.id}" class="ph-av" aria-label="Abrir perfil de ${esc(o.name)}">${av(o.name, o.h)}</a>
         <div>
-          <b>${esc(o.name)} ${o.ver ? VER : ''}</b>
+          <b>${esc(o.name)} ${o.ver ? VER : ''}</b> ${seguirBtn}
           <small>${esc(p.time)}${p.edited ? ' · editado' : ''}${o.cat ? ' · ' + esc(o.cat) : ''}</small>
         </div>
         <span class="tag">${postTag(p)}</span>

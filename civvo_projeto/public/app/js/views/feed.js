@@ -38,7 +38,6 @@ V.feed = () => {
   if (!FEED) return FEED_ERRO ? feedErro() : skel();
 
   const isOng = ROLE == 'ong';
-  const createBtn = isOng ? '<button class="btn sm desk" onclick="openCreate()">Criar conteúdo</button>' : '';
   const storyCreateBtn = isOng 
     ? '<button class="st" onclick="openCreate(\'MOMENTO\')" aria-label="Novo momento"><div class="ring e plus">+</div>Novo</button>' 
     : '';
@@ -61,7 +60,6 @@ V.feed = () => {
   return shell(
     `<div class="top">
        <h2>Momentos</h2>
-       ${createBtn}
      </div>
      <div class="stories">
        ${storyCreateBtn}

@@ -21,3 +21,56 @@ body {
 p {
   font-size: 20px;
 }
+
+
+/* foto da ONG clicável no card */
+.post .ph .ph-av { display: inline-flex; flex: none; border-radius: 50%; }
+
+/* botão Seguir ao lado do nome, no card */
+.post .ph .fo { display: inline; margin: 0 0 0 8px; padding: 0; font-weight: 700; }
+.post .ph .fo[aria-pressed="true"] { color: var(--mut); font-weight: 500; }
+
+/* botão grande "Criar conteúdo" na lateral */
+.side .side-create {
+  background: #b7e7ff; /* mesmo azul-claro dos botões primários; troque pela sua variável, se tiver */
+  color: #0b1a22;
+  font-weight: 700;
+  border-radius: 14px;
+  margin: 14px 0 0;
+  min-height: 48px;
+  justify-content: center;
+}
+.side .side-create:hover { filter: brightness(1.06); }
+
+.side {
+  transition: width .3s cubic-bezier(.4, 0, .2, 1), box-shadow .3s ease;
+  will-change: width;
+}
+.side .nav span {
+  transition: opacity .2s ease .08s, transform .3s cubic-bezier(.4, 0, .2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .side, .side .nav span { transition: none; }
+}
+
+.post .ph .ph-av { display: inline-flex; flex: none; border-radius: 50%; }
+
+/* botão Seguir ao lado do nome, no card */
+.post .ph .fo { display: inline; margin: 0 0 0 8px; padding: 0; font-weight: 700; }
+.post .ph .fo[aria-pressed="true"] { color: var(--mut); font-weight: 500; }
+
+/* botão grande "Criar conteúdo" na lateral */
+.side .side-create {
+  background: #b7e7ff; /* mesmo azul-claro dos botões primários; troque pela sua variável, se tiver */
+  color: #0b1a22;
+  font-weight: 700;
+  border-radius: 14px;
+  margin: 14px 0 0;
+  min-height: 48px;
+  justify-content: center;
+}
+.side .side-create:hover { filter: brightness(1.06); }
+
+/* contadores clicáveis do perfil (seguidores / seguindo / campanhas) */
+.pf .meta [role="button"]:hover b { text-decoration: underline; }
+.pf .meta [role="button"]:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: 6px; }

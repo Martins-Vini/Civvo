@@ -28,7 +28,7 @@ const adaptApi = {
     bio: '',
     plano: 'GRATUITO',
     transp: '',
-    followers: 0,
+    followers: +r.ong_seguidores || 0,
     social: {},
     estatuto: {},
     governanca: [],
@@ -59,6 +59,7 @@ const adaptApi = {
       likes: Math.max(+(r.total_likes ?? r.likes_count ?? r.likes) || 0, liked ? 1 : 0),
       comments: +(r.total_comments ?? r.comments_count ?? r.comments) || 0,
       liked,
+      edited: !!r.is_edited,
       time: tempoRelativo(r.created_at),
       boosted: ativoImpulso,
       boostEnd: r.boosted_until ? dia(r.boosted_until) : '',
@@ -125,17 +126,21 @@ function aplicarFeedReal(feed, curtidas, candidaturas, momentos = []) {
 
 async function buscarFeedReal() {
   const opcional = (p) => p.catch(() => []);
-  const [feed, curtidas, candidaturas, momentos] = await Promise.all([
+  const [feed, curtidas, candidaturas, momentos, seguidas] = await Promise.all([
     API.listarFeed(),
     opcional(API.historicoCurtidas()),
     ROLE == 'doador' ? opcional(API.historicoVoluntariado()) : Promise.resolve([]),
     opcional(API.listarMomentos()),
+    opcional(API.minhasOngsSeguidas()),
   ]);
 
   if (!Array.isArray(feed)) throw new Error('Resposta inesperada do servidor.');
 
   const lista = (x) => (Array.isArray(x) ? x : []);
   aplicarFeedReal(feed, lista(curtidas), lista(candidaturas), lista(momentos));
+
+  FOLLOW.clear();
+  lista(seguidas).forEach((x) => FOLLOW.add(Number(x)));
 }
 
 const atualizarFeedReal = buscarFeedReal;
