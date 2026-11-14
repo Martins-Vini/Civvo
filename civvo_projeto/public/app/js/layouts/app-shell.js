@@ -161,18 +161,21 @@ function sugest() {
   const ok = DONATIONS.filter((d) => d.status == 'APROVADO').length;
 
   const ongsList = ONGS.slice(0, 3)
-    .map((o) => `
-      <div class="sg">
-        ${av(o.name, o.h, 38)}
-        <div>
-          ${esc(o.name)}
-          <small>${esc(o.cat)}</small>
+    .map((o) => {
+      const isFollowing = FOLLOW.has(o.id);
+      return `
+        <div class="sg">
+          ${av(o.name, o.h, 38)}
+          <div>
+            ${esc(o.name)}
+            <small>${esc(o.cat)}</small>
+          </div>
+          <button class="btn light sm ${isFollowing ? 'following' : ''}" onclick="toggleSeguirOng(${o.id}, this)">
+            ${isFollowing ? 'Seguindo' : 'Seguir'}
+          </button>
         </div>
-        <button class="btn light sm" onclick="toggleSet(FOLLOW, ${o.id})">
-          ${FOLLOW.has(o.id) ? 'Seguindo' : 'Seguir'}
-        </button>
-      </div>
-    `)
+      `;
+    })
     .join('') || '<p style="color:var(--mut)">Nenhuma sugestão por enquanto.</p>';
 
   return `

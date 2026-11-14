@@ -76,14 +76,27 @@ function carregando(r, a) {
 const CMT_OK = new Set();
 
 function cmtsInicial(pid) {
-  if (!DEMO || LATENCIA.max <= 0 || CMT_OK.has(pid)) {
+  // Já carregamos os comentários reais deste post nesta sessão: só desenha o que já está em memória.
+  if (CMT_OK.has(pid)) {
     return nest(pid) || semComentarios();
   }
 
-  chamar().then(() => {
-    CMT_OK.add(pid);
-    drawComments(pid);
-  });
+  if (DEMO) {
+    if (LATENCIA.max <= 0) {
+      CMT_OK.add(pid);
+      return nest(pid) || semComentarios();
+    }
+
+    chamar().then(() => {
+      CMT_OK.add(pid);
+      drawComments(pid);
+    });
+  } else {
+    // Sessão real: busca os comentários salvos no MySQL antes de desenhar.
+    // Sem isso, o post-viewer (modal rápido) nunca ia buscar no banco e sempre
+    // mostrava "Seja o primeiro a comentar", mesmo havendo comentários salvos.
+    carregarComentariosReais(pid).then(() => CMT_OK.add(pid));
+  }
 
   const skeletons = [0, 1, 2]
     .map(() => `

@@ -1,7 +1,4 @@
-/* Dados reais do back-end (modo não-DEMO): feed e momentos → POSTS / ONGS / VOLUNT / STORIES.
-   O back devolve linhas de GET /posts/feed (type, caption, ong_nome, media, meta_valor...), que aqui viram o formato que as telas usam.
-   Campos que o back ainda não manda (contagem de curtidas/comentários, id da campanha) são lidos se existirem:
-   likes_count, comments_count, campaign_id. Enquanto não existirem, ficam 0 / null. */
+/* Dados reais do back-end (modo não-DEMO): feed e momentos → POSTS / ONGS / VOLUNT / STORIES. */
 
 const TIPO_POST = { POST: 'POST', CAMPANHA: 'CAMPANHA', VOLUNTARIADO: 'VOLUNTARIO' };
 
@@ -21,7 +18,6 @@ function tempoRelativo(v) {
 }
 
 const adaptApi = {
-  /* O feed só traz nome, logo e CNPJ da ONG; o resto fica vazio até existir rota de perfil público. */
   ong: (r) => ({
     id: r.ong_id,
     name: r.ong_nome || 'ONG',
@@ -41,7 +37,6 @@ const adaptApi = {
     ver: false,
   }),
 
-  /* Linha de MOMENTS → item do visualizador (exp em ms, para o app descartar os expirados). */
   momento: (r) => ({
     src: r.media_url,
     caption: r.caption || '',
@@ -50,19 +45,19 @@ const adaptApi = {
 
   post: (r, curtidos) => {
     const kind = TIPO_POST[r.type] || 'POST';
-    const liked = curtidos.has(r.id);
+    const liked = curtidos.has(r.id || r.post_id);
     const ativoImpulso = !!r.is_boosted && (!r.boosted_until || new Date(r.boosted_until) > new Date());
+    const postId = r.id || r.post_id;
 
     return {
-      id: r.id,
+      id: postId,
       ong: r.ong_id,
       kind,
-      text: r.caption || '',
+      text: r.caption || r.content || '',
       title: '',
       imgs: (r.media || []).filter((m) => m.media_type != 'VIDEO').map((m) => m.file_url),
-      /* sem a contagem do back, quem curtiu aparece pelo menos com 1 */
-      likes: Math.max(+(r.likes_count ?? r.likes) || 0, liked ? 1 : 0),
-      comments: +(r.comments_count ?? r.comments) || 0,
+      likes: Math.max(+(r.total_likes ?? r.likes_count ?? r.likes) || 0, liked ? 1 : 0),
+      comments: +(r.total_comments ?? r.comments_count ?? r.comments) || 0,
       liked,
       time: tempoRelativo(r.created_at),
       boosted: ativoImpulso,
@@ -77,7 +72,6 @@ const adaptApi = {
               status: r.campanha_status || 'EM_ANDAMENTO',
             }
           : null,
-      /* o back não guarda "local" nem "necessidades" da vaga: a descrição fica na legenda (text) */
       vol:
         kind == 'VOLUNTARIO'
           ? {
@@ -92,12 +86,10 @@ const adaptApi = {
 };
 
 function aplicarFeedReal(feed, curtidas, candidaturas, momentos = []) {
-  const curtidos = new Set(curtidas.map((p) => p.id));
+  const curtidos = new Set(curtidas.map((p) => p.id || p.post_id));
 
-  /* a ONG logada pode ainda não ter posts: preserva o objeto dela (dados da sessão) em vez de perdê-lo */
   const meu = ME_ONG != null ? ONGS.find((o) => o.id == ME_ONG) : null;
 
-  /* as ONGs vêm de quem tem post ou momento ativo (o back ainda não tem listagem de ONGs) */
   const porId = new Map();
   [...feed, ...momentos].forEach((r) => {
     if (!porId.has(String(r.ong_id))) porId.set(String(r.ong_id), adaptApi.ong(r));
@@ -110,7 +102,6 @@ function aplicarFeedReal(feed, curtidas, candidaturas, momentos = []) {
   POSTS.length = 0;
   POSTS.push(...feed.map((r) => adaptApi.post(r, curtidos)));
 
-  /* momentos: o back manda uma lista só (mais novos primeiro); aqui agrupa por ONG, com os itens do mais antigo ao mais novo */
   STORIES.length = 0;
   const grupos = new Map();
   momentos.forEach((r) => {
@@ -123,17 +114,15 @@ function aplicarFeedReal(feed, curtidas, candidaturas, momentos = []) {
     grupos.get(k).imgs.unshift(adaptApi.momento(r));
   });
 
-  /* candidaturas da própria pessoa (a ONG não recebe candidatos: não existe rota no back) */
   VOLUNT.length = 0;
   candidaturas.forEach((p) =>
-    VOLUNT.push({ id: 'a' + p.id, ong: p.ong_id, post: p.id, user: USER.apelido_unico, status: 'APROVADO', data: '' })
+    VOLUNT.push({ id: 'a' + (p.id || p.post_id), ong: p.ong_id, post: (p.id || p.post_id), user: USER.apelido_unico, status: 'APROVADO', data: '' })
   );
 
   FEED = 1;
   FEED_N = PAG;
 }
 
-/* Busca tudo de uma vez. Históricos e momentos são secundários: se falharem, o feed aparece sem eles. */
 async function buscarFeedReal() {
   const opcional = (p) => p.catch(() => []);
   const [feed, curtidas, candidaturas, momentos] = await Promise.all([
@@ -145,15 +134,12 @@ async function buscarFeedReal() {
 
   if (!Array.isArray(feed)) throw new Error('Resposta inesperada do servidor.');
 
-  /* secundários com formato inesperado viram lista vazia em vez de derrubar o feed */
   const lista = (x) => (Array.isArray(x) ? x : []);
   aplicarFeedReal(feed, lista(curtidas), lista(candidaturas), lista(momentos));
 }
 
-/* Recarrega os dados sem mostrar esqueleto (depois de publicar, excluir...). Lança erro se falhar. */
 const atualizarFeedReal = buscarFeedReal;
 
-/* Primeira carga (com esqueleto na tela) e nova tentativa depois de erro. */
 function carregarFeedReal() {
   FEED_PROMISE ??= (async () => {
     try {
@@ -162,7 +148,7 @@ function carregarFeedReal() {
     } catch (e) {
       console.error('Falha ao carregar o feed:', e);
       FEED_ERRO = e.name == 'ApiError' && e.message ? e.message : 'Não foi possível carregar o feed.';
-      FEED_PROMISE = null; /* permite tentar de novo */
+      FEED_PROMISE = null;
     } finally {
       go();
     }

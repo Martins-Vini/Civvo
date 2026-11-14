@@ -1,16 +1,13 @@
-/* Post individual (#/post/ID) e comentários em árvore (POST_COMMENT.parent_comment_id), também usados no visualizador. */
+/* Post individual (#/post/ID) e comentários em árvore */
 
 let RPL = null;
 let CURPOST = 0;
 
-/* modo real: o back ainda não lista os comentários de uma publicação, só recebe novos */
-const semComentarios = () =>
-  DEMO
-    ? '<p class="emp">Seja o primeiro a comentar.</p>'
-    : '<p class="emp">Os comentários de outras pessoas ainda não podem ser exibidos aqui. Você já pode comentar.</p>';
+const semComentarios = () => '<p class="emp">Seja o primeiro a comentar.</p>';
 
 const bump = (p, n) => {
-  p.comments = Math.max(0, p.comments + n);
+  if (!p) return;
+  p.comments = Math.max(0, (p.comments || 0) + n);
   document
     .querySelectorAll(`[data-cm="${p.id}"]`)
     .forEach((e) => (e.textContent = p.comments));
@@ -19,24 +16,13 @@ const bump = (p, n) => {
 const quem = () => {
   if (ROLE == 'ong') {
     const o = meOng();
-    return { 
-      user: o.name, 
-      nome: o.name, 
-      avatar: o.logo, 
-      h: o.h 
-    };
+    return { user: o.name, nome: o.name, avatar: o.logo, h: o.h };
   }
-  
-  return { 
-    user: USER.apelido_unico, 
-    nome: nomeDoador(), 
-    avatar: USER.avatar_url, 
-    h: 200 
-  };
+  return { user: USER.apelido_unico, nome: nomeDoador(), avatar: USER.avatar_url, h: 200 };
 };
 
 const canDelComment = (pid) => {
-  if (!DEMO) return false; /* o back não tem rota para excluir comentário */
+  if (!DEMO) return false;
   const p = POSTS.find((x) => x.id == pid);
   return ROLE == 'ong' && !!p && p.ong == ME_ONG;
 };
@@ -44,7 +30,6 @@ const canDelComment = (pid) => {
 const branch = (id) => {
   const ids = new Set([id]);
   let ch = true;
-  
   while (ch) {
     ch = false;
     COMMENTS.forEach((x) => {
@@ -54,7 +39,6 @@ const branch = (id) => {
       }
     });
   }
-  
   return ids;
 };
 
@@ -72,11 +56,10 @@ const nest = (pid, parent = null, d = 0) => {
         <div class="cmt ${isRep}" style="margin-left:${marginLeft}px">
           ${av(c.nome || c.user, c.h || 200, 30, c.avatar)}
           <div class="cmb">
-            <b>${esc(c.user)}</b> 
+            <b>${esc(c.nome || c.user)}</b> 
             <small style="color:var(--mut)">${esc(dia(c.time))}</small>
             <p>${esc(c.text)}</p>
             <button class="lk" style="margin:0 12px 0 0" onclick="replyTo(${c.id})">Responder</button>
-            ${DEMO ? `<button class="lk" style="margin:0 12px 0 0" onclick="openReport('COMMENT', ${c.id})">Denunciar</button>` : ''}
             ${delBtn}
           </div>
         </div>
@@ -86,22 +69,57 @@ const nest = (pid, parent = null, d = 0) => {
     .join('');
 };
 
+async function carregarComentariosReais(pid) {
+  if (DEMO) return;
+  try {
+    const lista = await window.CivvoApi.listarComentariosPost(pid);
+    
+    // LIMPEZA SEGURA: Remove da memória local APENAS os comentários deste post para evitar duplicação
+    for (let i = COMMENTS.length - 1; i >= 0; i--) {
+      if (Number(COMMENTS[i].post) === Number(pid)) {
+        COMMENTS.splice(i, 1);
+      }
+    }
+
+    // Insere limpo e ordenado exatamente o que veio do MySQL
+    if (Array.isArray(lista)) {
+      lista.forEach((c) => {
+        COMMENTS.push({
+          id: c.id,
+          post: pid,
+          parent: c.parent_comment_id || null,
+          user: c.autor_nome || 'Usuário Civvo',
+          nome: c.autor_nome || 'Usuário Civvo',
+          avatar: c.autor_avatar || '',
+          h: 200,
+          text: c.content,
+          time: new Date(c.created_at).toLocaleDateString('pt-BR'),
+        });
+      });
+    }
+    
+    CMT_OK.add(pid);
+    drawComments(pid);
+  } catch (e) {
+    console.error('Erro ao buscar comentários do banco:', e);
+  }
+}
+
 function drawComments(pid) {
   if (!$('#cmts')) return;
-  
   $('#cmts').innerHTML = nest(pid) || semComentarios();
   
   const r = $('#rpl');
-  r.hidden = !RPL;
-  if (RPL) {
-    r.firstElementChild.textContent = 'Respondendo a @' + RPL.user;
+  if (r) {
+    r.hidden = !RPL;
+    if (RPL) r.firstElementChild.textContent = 'Respondendo a @' + RPL.user;
   }
 }
 
 function replyTo(id) {
-  RPL = id ? { id, user: COMMENTS.find((c) => c.id == id).user } : null;
+  RPL = id ? { id, user: COMMENTS.find((c) => c.id == id)?.user || 'Usuário' } : null;
   drawComments(CURPOST);
-  $('#nc').focus();
+  $('#nc')?.focus();
 }
 
 async function addComment(pid, btn) {
@@ -114,8 +132,7 @@ async function addComment(pid, btn) {
   btn = btn || i.nextElementSibling;
 
   const ok = await comEspera(btn, 'Enviando…', async () => {
-    /* modo real: o back devolve o id do comentário (usado nas respostas) */
-    const r = DEMO ? null : await API.comentarPost(pid, t, par);
+    const r = DEMO ? null : await window.CivvoApi.comentarPost(pid, t, par);
 
     COMMENTS.push({
       id: r?.commentId ?? Date.now(),
@@ -130,15 +147,6 @@ async function addComment(pid, btn) {
     });
 
     bump(POSTS.find((x) => x.id == pid), 1);
-
-    if (!par && ROLE != 'ong') {
-      notify(
-        'ong', 
-        'COMENTARIO', 
-        `@${w.user} comentou em uma publicação.`, 
-        '#/post/' + pid
-      );
-    }
   });
 
   if (!ok) return;
@@ -146,42 +154,6 @@ async function addComment(pid, btn) {
   RPL = null;
   i.value = '';
   drawComments(pid);
-}
-
-function askDelComment(id) {
-  const c = COMMENTS.find((x) => x.id == id);
-  if (!c || !canDelComment(c.post)) return;
-
-  const n = branch(id).size - 1;
-  const avisoRespostas = n ? `As ${n} resposta(s) a ele também serão removidas. ` : '';
-
-  openModal(
-    `<h3>Excluir comentário?</h3>
-     <p style="margin:8px 0 16px">${avisoRespostas}Esta ação não pode ser desfeita.</p>
-     <button class="btn full" style="background:var(--bad)" onclick="delComment(${id});closeModal()">Excluir</button>`,
-    'Excluir comentário'
-  );
-}
-
-function delComment(id) {
-  const c = COMMENTS.find((x) => x.id == id);
-  if (!c || !canDelComment(c.post)) return;
-
-  const ids = branch(id);
-
-  for (let i = COMMENTS.length - 1; i >= 0; i--) {
-    if (ids.has(COMMENTS[i].id)) {
-      COMMENTS.splice(i, 1);
-    }
-  }
-
-  bump(POSTS.find((x) => x.id == c.post), -ids.size);
-
-  if (RPL && ids.has(RPL.id)) {
-    RPL = null;
-  }
-
-  drawComments(c.post);
 }
 
 const openPost = (id) => {
@@ -201,6 +173,9 @@ V.post = (id) => {
   RPL = null;
   CURPOST = p.id;
 
+  // Dispara a busca em tempo real no banco MySQL
+  setTimeout(() => carregarComentariosReais(p.id), 50);
+
   const content = `
     <div class="top">
       <a class="btn light sm" href="#/feed">← Feed</a>
@@ -208,7 +183,7 @@ V.post = (id) => {
     ${postH(p)}
     <div class="card" style="padding:16px">
       <h4 style="margin-bottom:8px">Comentários</h4>
-      <div id="cmts">${cmtsInicial(p.id)}</div>
+      <div id="cmts"><p class="emp">Carregando comentários...</p></div>
       <div id="rpl" class="rpl" hidden>
         <span></span>
         <button class="lk" style="margin:0" onclick="replyTo(null)">Cancelar</button>

@@ -84,15 +84,21 @@ function openCreate(t = 'POST') {
     ? '' 
     : `<button class="btn full" onclick="publish('${t}', this)">Publicar ${CT[t][0].toLowerCase()}</button>`;
 
-  /* modo real: o banco guarda só o link da imagem (até 255 caracteres) e ainda não há upload de arquivos */
-  const mediaField = DEMO
-    ? `<label for="cMed">${mom ? 'Imagem do momento' : 'Imagens (até 10)'}</label>
-       <input id="cMed" type="file" accept="image/*" ${mom ? '' : 'multiple'} class="in" onchange="edAdd(this)">
-       <div id="edArea"></div>`
-    : `${mom
-         ? '<label for="cUrl">Link da imagem do momento</label><input id="cUrl" class="in" type="url" placeholder="https://…">'
-         : '<label for="cUrl">Links das imagens (opcional, um por linha, até 10)</label><textarea id="cUrl" class="in" rows="2" placeholder="https://…"></textarea>'}
-       <small style="color:var(--mut)">O envio de arquivos ainda não está disponível: cole o link (https) de uma imagem já hospedada.</small>`;
+  // Publicação/Campanha/Voluntariado: upload de arquivo de verdade (igual Instagram — no celular, o próprio
+  // input já abre a galeria). As fotos vão para o Cloudinary na hora de publicar, nunca por link colado.
+  // Momento: ainda por link por enquanto — a rota de criação de Momento no backend só aceita media_url
+  // (isso muda quando mexermos nos Momentos/Stories).
+  const mediaField = mom
+    ? (DEMO
+        ? `<label for="cMed">Imagem do momento</label>
+           <input id="cMed" type="file" accept="image/*" class="in" onchange="edAdd(this)">
+           <div id="edArea"></div>`
+        : `<label for="cUrl">Link da imagem do momento</label>
+           <input id="cUrl" class="in" type="url" placeholder="https://…">
+           <small style="color:var(--mut)">Upload de arquivo para Momentos chega em breve: por enquanto, cole o link (https) de uma imagem já hospedada.</small>`)
+    : `<label for="cMed">Imagens (até 10)</label>
+       <input id="cMed" type="file" accept="image/*" multiple class="in" onchange="edAdd(this)">
+       <div id="edArea"></div>`;
 
   openModal(
     `<h3>Criar</h3>
@@ -237,6 +243,16 @@ function edOut(it) {
   return c.toDataURL('image/jpeg', 0.85);
 }
 
+/* Converte a prévia recortada (dataURL) em Blob, pronta para ir num FormData de verdade. */
+function dataURLtoBlob(dataUrl) {
+  const [header, base64] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)[1];
+  const bin = atob(base64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
 /* Formatos de data do MySQL. Os prazos (só data) vão ao meio-dia para o dia não mudar por fuso horário ao voltar do back. */
 const sqlDia = (iso) => `${iso} 12:00:00`;
 const sqlAgora = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
@@ -245,24 +261,23 @@ const sqlAgora = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' 
 async function publishReal(t, btn) {
   const txt = $('#cTxt').value.trim();
   const e = $('#cerr');
-  const urls = ($('#cUrl').value || '').split(/\s+/).filter(Boolean);
 
-  if (urls.some((u) => !/^https:\/\/\S+$/i.test(u) || u.length > 255)) {
-    e.textContent = 'Use links de imagem começando com https:// (até 255 caracteres cada).';
-    return;
-  }
-  if (urls.length > 10) {
-    e.textContent = 'No máximo 10 imagens.';
-    return;
-  }
   if (t == 'MOMENTO') {
-    if (urls.length != 1) {
-      e.textContent = 'Informe o link da imagem do momento.';
+    // Momento ainda usa link (ver comentário em mediaField).
+    const momUrl = ($('#cUrl')?.value || '').trim();
+    if (!momUrl || !/^https:\/\/\S+$/i.test(momUrl) || momUrl.length > 255) {
+      e.textContent = 'Informe o link da imagem do momento, começando com https://.';
       return;
     }
-  } else if (!txt) {
-    e.textContent = 'Escreva o texto da publicação.';
-    return;
+  } else {
+    if (ED.pend) {
+      e.textContent = 'Aguarde o carregamento das imagens.';
+      return;
+    }
+    if (!txt) {
+      e.textContent = 'Escreva o texto da publicação.';
+      return;
+    }
   }
 
   let caption = txt;
@@ -314,17 +329,23 @@ async function publishReal(t, btn) {
     'Publicando…',
     async () => {
       if (t == 'MOMENTO') {
-        await API.criarMomento({ media_url: urls[0], caption: txt, duracao_horas: +$('#cDur').value });
+        const momUrl = $('#cUrl').value.trim();
+        await API.criarMomento({ media_url: momUrl, caption: txt, duracao_horas: +$('#cDur').value });
       } else {
-        await API.criarPost({
-          type: t == 'VOLUNTARIO' ? 'VOLUNTARIADO' : t,
-          caption,
-          is_boosted: dias > 0,
-          boosted_until: dias > 0 ? sqlAgora(Date.now() + dias * 864e5) : null,
-          mediaList: urls.map((u) => ({ file_url: u, media_type: 'IMAGE' })),
-          campaignData,
-          volunteerData,
+        // multipart/form-data: as fotos vão como arquivos de verdade, não como link.
+        const fd = new FormData();
+        fd.append('type', t == 'VOLUNTARIO' ? 'VOLUNTARIADO' : t);
+        fd.append('caption', caption);
+        fd.append('is_boosted', dias > 0);
+        if (dias > 0) fd.append('boosted_until', sqlAgora(Date.now() + dias * 864e5));
+        if (campaignData) fd.append('campaignData', JSON.stringify(campaignData));
+        if (volunteerData) fd.append('volunteerData', JSON.stringify(volunteerData));
+
+        ED.list.forEach((it, i) => {
+          fd.append('images', dataURLtoBlob(edOut(it)), `foto-${i + 1}.jpg`);
         });
+
+        await API.criarPost(fd);
       }
 
       /* já publicou: se só a releitura falhar, o conteúdo aparece ao recarregar a página */
