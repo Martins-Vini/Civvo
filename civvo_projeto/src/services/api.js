@@ -25,10 +25,17 @@ function encerrarSessao() {
 }
 
 export async function apiRequest(endpoint, { method = 'GET', dados = null, autenticado = false } = {}) {
+    // FormData (upload de imagem de verdade) precisa ir sem Content-Type: o navegador define sozinho
+    // o "multipart/form-data; boundary=..." correto, que é o que o multer espera no back-end.
+    // Se a gente fixar 'application/json' aqui, o back não consegue separar os arquivos e o upload quebra.
+    const ehFormData = typeof FormData !== 'undefined' && dados instanceof FormData;
+
     const headers = {
-        'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': 'true',
     };
+    if (!ehFormData) {
+        headers['Content-Type'] = 'application/json';
+    }
 
     if (autenticado) {
         const token = lerSessao()?.token;
@@ -47,7 +54,7 @@ export async function apiRequest(endpoint, { method = 'GET', dados = null, auten
         resposta = await fetch(`${API_BASE_URL}${endpoint}`, {
             method,
             headers,
-            body: dados ? JSON.stringify(dados) : undefined,
+            body: ehFormData ? dados : (dados ? JSON.stringify(dados) : undefined),
             signal: controle.signal,
         });
     } catch (erro) {
@@ -98,6 +105,10 @@ export const curtirPost = (postId) => doEnvio('POST', `/posts/${id(postId)}/curt
 export const listarComentariosPost = (postId) => doGet(`/posts/${id(postId)}/comentarios`);
 export const comentarPost = (postId, content, parentCommentId = null) =>
     doEnvio('POST', `/posts/${id(postId)}/comentar`, { content, parentCommentId });
+export const editarComentario = (postId, commentId, content) =>
+    doEnvio('PUT', `/posts/${id(postId)}/comentarios/${id(commentId)}`, { content });
+export const excluirComentario = (postId, commentId) =>
+    doEnvio('DELETE', `/posts/${id(postId)}/comentarios/${id(commentId)}`);
 export const compartilharPost = (postId) => doEnvio('POST', `/posts/${id(postId)}/compartilhar`);
 export const denunciarPost = (postId, reason) =>
     doEnvio('POST', `/posts/${id(postId)}/denunciar`, { reason: String(reason ?? '').slice(0, 225) });
@@ -112,6 +123,18 @@ export const historicoVoluntariado = (userId) =>
 export const toggleSeguir = (payload) => doEnvio('POST', '/followers/toggle', payload);
 export const listarSeguidores = (userId) => doGet(`/followers/${id(userId)}/followers`);
 export const listarSeguindo = (userId) => doGet(`/followers/${id(userId)}/following`);
+/* seguir/deixar de seguir uma ONG (id do perfil da ONG, o mesmo de POSTS.ong_id) */
+export const toggleSeguirOng = (ongId) => doEnvio('POST', '/followers/toggle', { ongId });
+/* ids das ONGs que eu sigo */
+export const minhasOngsSeguidas = () => doGet('/followers/me/ongs');
+export const contagensOng = (ongId) => doGet(`/followers/ong/${id(ongId)}/contagens`);
+/* tipo: 'seguidores' | 'seguindo' */
+export const listaOng = (ongId, tipo) => doGet(`/followers/ong/${id(ongId)}/${id(tipo)}`);
+export const minhaListaSeguindo = () => doGet('/followers/me/seguindo');
+
+/* ---- Notificações ---- */
+export const listarNotificacoes = () => doGet('/notificacoes');
+export const marcarNotificacoesLidas = () => doEnvio('PUT', '/notificacoes/lidas');
 
 /* ---- Momentos (stories) ---- */
 export const listarMomentos = () => doGet('/moments');

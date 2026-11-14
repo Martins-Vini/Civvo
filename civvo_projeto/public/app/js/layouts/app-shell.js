@@ -107,6 +107,11 @@ function shell(inner, on, { rightCol = 1, wide = 0 } = {}) {
     ? `<button class="tb-plus" onclick="openCreate()" aria-label="Criar conteúdo">${ic('plus')}</button>` 
     : '';
 
+  /* botão grande "Criar conteúdo" na lateral (só ONG); no celular continua o "+" da barra superior */
+  const sideCreate = ROLE == 'ong'
+    ? `<button class="nav side-create" onclick="openCreate()" aria-label="Criar conteúdo">${ic('plus')}<span>Criar conteúdo</span></button>`
+    : '';
+
   const chatBtn = ROLE != 'admin' 
     ? `<a class="tb-m ${on == 'chats' ? 'on' : ''}" href="#/chats" aria-label="Mensagens">${ic('chat')}</a>` 
     : '';
@@ -132,6 +137,7 @@ function shell(inner, on, { rightCol = 1, wide = 0 } = {}) {
         ${logo}
         <div style="height:18px"></div>
         ${navLinks}
+        ${sideCreate}
         <div style="flex:1"></div>
         <div class="side-roles">${roleSeg()}</div>
         <button class="nav menub" onclick="openMenu()" aria-label="Menu">
@@ -160,7 +166,7 @@ function shell(inner, on, { rightCol = 1, wide = 0 } = {}) {
 function sugest() {
   const ok = DONATIONS.filter((d) => d.status == 'APROVADO').length;
 
-  const ongsList = ONGS.slice(0, 3)
+  const ongsList = ONGS.filter((o) => o.id != ME_ONG).slice(0, 3)
     .map((o) => {
       const isFollowing = FOLLOW.has(o.id);
       return `
@@ -170,7 +176,7 @@ function sugest() {
             ${esc(o.name)}
             <small>${esc(o.cat)}</small>
           </div>
-          <button class="btn light sm ${isFollowing ? 'following' : ''}" onclick="toggleSeguirOng(${o.id}, this)">
+          <button class="btn light sm ${isFollowing ? 'following' : ''}" data-fo="${o.id}" aria-pressed="${isFollowing}" onclick="seguirOngClick(${o.id}, this)">
             ${isFollowing ? 'Seguindo' : 'Seguir'}
           </button>
         </div>

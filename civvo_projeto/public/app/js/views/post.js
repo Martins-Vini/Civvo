@@ -21,11 +21,22 @@ const quem = () => {
   return { user: USER.apelido_unico, nome: nomeDoador(), avatar: USER.avatar_url, h: 200 };
 };
 
-const canDelComment = (pid) => {
-  if (!DEMO) return false;
+// Dono do comentário: pode editar e excluir o próprio comentário.
+// Em sessão real comparamos pelo user_id de verdade (vindo do banco); no demo, como não existe
+// um id de usuário real guardado por comentário, comparamos pelo nome de quem está "logado".
+const souAutorComentario = (c) => {
+  if (DEMO) return c.user === quem().user;
+  const meuId = window.__civvoSessao?.usuario?.id;
+  return meuId != null && c.userId != null && Number(c.userId) === Number(meuId);
+};
+
+// Dono da publicação (ONG): pode excluir qualquer comentário nela, mas nunca editar o de outra pessoa.
+const donoDoPostPodeExcluir = (pid) => {
   const p = POSTS.find((x) => x.id == pid);
   return ROLE == 'ong' && !!p && p.ong == ME_ONG;
 };
+
+let EDITING_COMMENT = null;
 
 const branch = (id) => {
   const ids = new Set([id]);
@@ -48,9 +59,20 @@ const nest = (pid, parent = null, d = 0) => {
     .map((c) => {
       const isRep = d ? 'rep' : '';
       const marginLeft = Math.min(d, 3) * 18;
-      const delBtn = canDelComment(pid) 
-        ? `<button class="lk" style="margin:0" onclick="askDelComment(${c.id})">Excluir</button>` 
-        : '';
+      const souDono = souAutorComentario(c);
+      const podeExcluir = souDono || donoDoPostPodeExcluir(pid);
+      const estaEditando = EDITING_COMMENT == c.id;
+
+      const corpoHtml = estaEditando
+        ? `<textarea id="ecTxt-${c.id}" class="in" rows="2">${esc(c.text)}</textarea>
+           <div style="margin-top:6px">
+             <button class="btn sm" onclick="salvarEdicaoComentario(${c.id}, ${pid}, this)">Salvar</button>
+             <button class="lk" style="margin-left:10px" onclick="cancelarEdicaoComentario(${pid})">Cancelar</button>
+           </div>`
+        : `<p>${esc(c.text)}${c.editado ? ' <small style="color:var(--mut)">(editado)</small>' : ''}</p>
+           <button class="lk" style="margin:0 12px 0 0" onclick="replyTo(${c.id})">Responder</button>
+           ${souDono ? `<button class="lk" style="margin:0 12px 0 0" onclick="iniciarEdicaoComentario(${c.id})">Editar</button>` : ''}
+           ${podeExcluir ? `<button class="lk" style="margin:0" onclick="askDelComment(${c.id}, ${pid})">Excluir</button>` : ''}`;
 
       return `
         <div class="cmt ${isRep}" style="margin-left:${marginLeft}px">
@@ -58,9 +80,7 @@ const nest = (pid, parent = null, d = 0) => {
           <div class="cmb">
             <b>${esc(c.nome || c.user)}</b> 
             <small style="color:var(--mut)">${esc(dia(c.time))}</small>
-            <p>${esc(c.text)}</p>
-            <button class="lk" style="margin:0 12px 0 0" onclick="replyTo(${c.id})">Responder</button>
-            ${delBtn}
+            ${corpoHtml}
           </div>
         </div>
         ${nest(pid, c.id, d + 1)}
@@ -68,6 +88,64 @@ const nest = (pid, parent = null, d = 0) => {
     })
     .join('');
 };
+
+function iniciarEdicaoComentario(id) {
+  RPL = null;
+  EDITING_COMMENT = id;
+  drawComments(CURPOST);
+  $('#ecTxt-' + id)?.focus();
+}
+
+function cancelarEdicaoComentario(pid) {
+  EDITING_COMMENT = null;
+  drawComments(pid);
+}
+
+async function salvarEdicaoComentario(id, pid, btn) {
+  const ta = $('#ecTxt-' + id);
+  const novoTexto = ta.value.trim();
+  if (!novoTexto) return;
+
+  const c = COMMENTS.find((x) => x.id == id);
+
+  const ok = await comEspera(btn, 'Salvando…', async () => {
+    if (!DEMO) await window.CivvoApi.editarComentario(pid, id, novoTexto);
+    c.text = novoTexto;
+    c.editado = true;
+  });
+
+  if (!ok) return;
+
+  EDITING_COMMENT = null;
+  drawComments(pid);
+}
+
+function askDelComment(id, pid) {
+  openModal(
+    `<h3>Excluir comentário?</h3>
+     <p style="margin:8px 0 16px">Esta ação não pode ser desfeita.</p>
+     <button class="btn full" style="background:var(--bad)" onclick="delComment(${id}, ${pid}, this)">Excluir definitivamente</button>`,
+    'Excluir comentário'
+  );
+}
+
+async function delComment(id, pid, btn) {
+  const ok = await comEspera(btn, 'Excluindo…', async () => {
+    if (!DEMO) await window.CivvoApi.excluirComentario(pid, id);
+
+    const idx = COMMENTS.findIndex((x) => x.id == id);
+    if (idx >= 0) COMMENTS.splice(idx, 1);
+
+    bump(POSTS.find((x) => x.id == pid), -1);
+  });
+
+  if (!ok) return;
+
+  if (EDITING_COMMENT == id) EDITING_COMMENT = null;
+  closeModal();
+  toast('Comentário excluído.');
+  drawComments(pid);
+}
 
 async function carregarComentariosReais(pid) {
   if (DEMO) return;
@@ -88,11 +166,13 @@ async function carregarComentariosReais(pid) {
           id: c.id,
           post: pid,
           parent: c.parent_comment_id || null,
+          userId: c.user_id,
           user: c.autor_nome || 'Usuário Civvo',
           nome: c.autor_nome || 'Usuário Civvo',
           avatar: c.autor_avatar || '',
           h: 200,
           text: c.content,
+          editado: !!c.is_edited,
           time: new Date(c.created_at).toLocaleDateString('pt-BR'),
         });
       });
@@ -117,6 +197,7 @@ function drawComments(pid) {
 }
 
 function replyTo(id) {
+  EDITING_COMMENT = null;
   RPL = id ? { id, user: COMMENTS.find((c) => c.id == id)?.user || 'Usuário' } : null;
   drawComments(CURPOST);
   $('#nc')?.focus();
@@ -138,11 +219,13 @@ async function addComment(pid, btn) {
       id: r?.commentId ?? Date.now(),
       post: pid,
       parent: par,
+      userId: DEMO ? null : window.__civvoSessao?.usuario?.id,
       user: w.user,
       nome: w.nome,
       avatar: w.avatar,
       h: w.h,
       text: t,
+      editado: false,
       time: new Date().toLocaleDateString('pt-BR'),
     });
 
