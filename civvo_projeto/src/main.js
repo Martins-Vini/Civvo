@@ -4,29 +4,8 @@ import { renderLoginAdmin } from './pages/login-admin.js';
 import { renderCadastroUser } from './pages/cadastro-user.js';
 import { renderCadastroOng } from './pages/cadastro-ong.js';
 import { renderRedefinirSenha } from './pages/redefinir-senha.js';
-import paginaInicialSvg from './assets/pagina-inicial.svg';
-import logoCivvoSvg from './assets/logo-civvo.svg';
-
-function renderPaginaInicial() {
-  const app = document.getElementById('app');
-
-  app.innerHTML = `
-    <header class="topbar">
-      <img class="logo-civvo" src="${logoCivvoSvg}" alt="Pessoas em volta de um coração">
-    </header>
-    <main class="home">
-      <h1 class="titulo-principal">Olá, <br><span>Doador!</span></h1>
-      <img src="${paginaInicialSvg}" alt="Pessoas em volta de um coração">
-      <p>Vamos começar?</p>
-
-      <a class="entrar-btn" href="#/login-user">Entrar</a>
-      <a class="cadastrar-btn" href="#/cadastro-user">Cadastrar</a>
-
-      <p class="login-alternativo">Você é uma ONG? <a href="#/login-ong">Entre por aqui</a></p>
-
-    </main>
-  `;
-}
+import { renderPaginaInicial, limparPaginaInicial } from './pages/pagina-inicial.js';
+import { lerSessao } from './services/sessao.js';
 
 const routes = {
   '#/inicio': renderPaginaInicial,
@@ -43,11 +22,19 @@ function renderCurrentRoute() {
   const hash = window.location.hash || '#/inicio';
   const route = routes[hash];
 
+  /* desfaz os efeitos (scroll, observers) da home antes de trocar de tela */
+  limparPaginaInicial();
+
   if (route) {
+    window.scrollTo(0, 0);
     route();
     return;
   }
 
+  /* hash desconhecido: com sessão é rota do app logado (quem cuida é o bridge.js), então não desenha a home por baixo */
+  if (lerSessao()) return;
+
+  window.scrollTo(0, 0);
   renderPaginaInicial();
 }
 
