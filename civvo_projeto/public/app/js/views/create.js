@@ -40,8 +40,9 @@ function openCreate(t = 'POST') {
     W: mom ? 720 : 1280, 
     H: mom ? 1280 : 800, 
     multi: !mom, 
-    pend: 0, 
-    mom 
+    pend: 0,
+    mom,
+    dur: 24
   };
 
   const segHtml = Object.keys(CT)
@@ -63,15 +64,12 @@ function openCreate(t = 'POST') {
 
   const extraFields = (t == 'VOLUNTARIO' ? volFields() : '') + campFields;
 
- const bottomContent = mom 
-    ? (DEMO
-        ? '<p style="color:var(--mut);font-size:12px;margin-top:10px">O momento fica visível por 24 horas.</p>'
-        : `<label for="cDur">Duração</label>
-           <select id="cDur" class="in">
-             <option value="24">24 horas</option>
-             <option value="36">36 horas</option>
-             <option value="48">48 horas</option>
-           </select>`)
+ const bottomContent = mom
+    ? `<label>Duração</label>
+       <div class="seg" role="group" aria-label="Duração do momento" style="margin-bottom:6px">
+         ${[24, 36, 48].map((h) => `<button type="button" class="${h == ED.dur ? 'on' : ''}" aria-pressed="${h == ED.dur}" onclick="setDur(${h}, this)">${h} h</button>`).join('')}
+       </div>
+       <small style="color:var(--mut)">O momento some sozinho depois desse tempo.</small>`
     : `<label for="cBoost">Impulsionar</label>
        <select id="cBoost" class="in">
          <option value="0">Não impulsionar</option>
@@ -89,13 +87,10 @@ function openCreate(t = 'POST') {
   // Momento: ainda por link por enquanto — a rota de criação de Momento no backend só aceita media_url
   // (isso muda quando mexermos nos Momentos/Stories).
   const mediaField = mom
-    ? (DEMO
-        ? `<label for="cMed">Imagem do momento</label>
-           <input id="cMed" type="file" accept="image/*" class="in" onchange="edAdd(this)">
-           <div id="edArea"></div>`
-        : `<label for="cUrl">Link da imagem do momento</label>
-           <input id="cUrl" class="in" type="url" placeholder="https://…">
-           <small style="color:var(--mut)">Upload de arquivo para Momentos chega em breve: por enquanto, cole o link (https) de uma imagem já hospedada.</small>`)
+    ? `<label for="cMed">Foto do momento</label>
+       <input id="cMed" type="file" accept="image/*" class="in" onchange="edAdd(this)">
+       <small style="color:var(--mut)">Escolha da galeria e ajuste o enquadramento (formato vertical, como no Instagram).</small>
+       <div id="edArea"></div>`
     : `<label for="cMed">Imagens (até 10)</label>
        <input id="cMed" type="file" accept="image/*" multiple class="in" onchange="edAdd(this)">
        <div id="edArea"></div>`;
@@ -263,10 +258,12 @@ async function publishReal(t, btn) {
   const e = $('#cerr');
 
   if (t == 'MOMENTO') {
-    // Momento ainda usa link (ver comentário em mediaField).
-    const momUrl = ($('#cUrl')?.value || '').trim();
-    if (!momUrl || !/^https:\/\/\S+$/i.test(momUrl) || momUrl.length > 255) {
-      e.textContent = 'Informe o link da imagem do momento, começando com https://.';
+    if (ED.pend) {
+      e.textContent = 'Aguarde o carregamento da imagem.';
+      return;
+    }
+    if (!ED.list.length) {
+      e.textContent = 'Escolha uma foto para o momento.';
       return;
     }
   } else {
@@ -329,8 +326,12 @@ async function publishReal(t, btn) {
     'Publicando…',
     async () => {
       if (t == 'MOMENTO') {
-        const momUrl = $('#cUrl').value.trim();
-        await API.criarMomento({ media_url: momUrl, caption: txt, duracao_horas: +$('#cDur').value });
+        // upload de arquivo de verdade (a imagem já sai recortada em 9:16 pelo editor)
+        const fd = new FormData();
+        fd.append('caption', txt);
+        fd.append('duracao_horas', ED.dur || 24);
+        fd.append('image', dataURLtoBlob(edOut(ED.list[0])), 'momento.jpg');
+        await API.criarMomentoUpload(fd);
       } else {
         // multipart/form-data: as fotos vão como arquivos de verdade, não como link.
         const fd = new FormData();
@@ -434,7 +435,7 @@ async function publish(t, btn) {
 
       const o = meOng();
       if (t == 'MOMENTO') {
-        const it = { src: imgs[0], caption: txt, exp: Date.now() + 864e5 };
+        const it = { src: imgs[0], caption: txt, exp: Date.now() + (ED.dur || 24) * 36e5 };
         const s = STORIES.find((x) => x.o == o.id);
         s ? s.imgs.push(it) : STORIES.unshift({ o: o.id, imgs: [it] });
       } else {
@@ -493,3 +494,12 @@ const volFields = () =>
        </div>
        ${DEMO ? '' : `<label for="cLimV">Inscrições até</label>
        <input id="cLimV" class="in" type="date" min="${hoje()}">`}`;
+
+/* escolhe a duração do momento (24, 36 ou 48 horas) */
+function setDur(h, b) {
+  ED.dur = h;
+  b.parentElement.querySelectorAll('button').forEach((x) => {
+    x.classList.toggle('on', x === b);
+    x.setAttribute('aria-pressed', x === b);
+  });
+}

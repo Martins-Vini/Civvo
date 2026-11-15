@@ -109,6 +109,8 @@ export const editarComentario = (postId, commentId, content) =>
     doEnvio('PUT', `/posts/${id(postId)}/comentarios/${id(commentId)}`, { content });
 export const excluirComentario = (postId, commentId) =>
     doEnvio('DELETE', `/posts/${id(postId)}/comentarios/${id(commentId)}`);
+export const denunciarComentario = (commentId, reason) =>
+    doEnvio('POST', `/comentarios/${id(commentId)}/denunciar`, { reason: String(reason ?? '').slice(0, 225) });
 export const compartilharPost = (postId) => doEnvio('POST', `/posts/${id(postId)}/compartilhar`);
 export const denunciarPost = (postId, reason) =>
     doEnvio('POST', `/posts/${id(postId)}/denunciar`, { reason: String(reason ?? '').slice(0, 225) });
@@ -139,6 +141,11 @@ export const marcarNotificacoesLidas = () => doEnvio('PUT', '/notificacoes/lidas
 /* ---- Momentos (stories) ---- */
 export const listarMomentos = () => doGet('/moments');
 export const criarMomento = (payload) => doEnvio('POST', '/moments', payload);
+/* upload de arquivo de verdade (FormData: image, caption, duracao_horas) */
+export const criarMomentoUpload = (formData) => doEnvio('POST', '/moments/upload', formData);
+export const momentosVistos = () => doGet('/moments/vistos');
+export const marcarMomentoVisto = (momentId) => doEnvio('POST', `/moments/${id(momentId)}/visto`);
+export const excluirMomento = (momentId) => doEnvio('DELETE', `/moments/${id(momentId)}`);
 
 /* ---- Doações ---- */
 export const doar = (payload) => doEnvio('POST', '/donations', payload);
@@ -152,6 +159,13 @@ export const excluirContaOng = () => doEnvio('DELETE', '/ong/account');
 
 /* ---- ONG ---- */
 export const perfilOng = () => doGet('/ong/perfil');
+
+/* ---- Perfil completo e editável (ONG e doador) ---- */
+export const meuPerfil = () => doGet('/perfil/me');
+export const atualizarMeuPerfil = (payload) => doEnvio('PUT', '/perfil/me', payload);
+export const perfilOngPublico = (ongId) => doGet(`/perfil/ong/${id(ongId)}`);
+/* FormData: image + tipo ('avatar' | 'banner') */
+export const enviarImagemPerfil = (formData) => doEnvio('POST', '/perfil/imagem', formData);
 
 /* ---- Admin ---- */
 export const listarDenuncias = () => doGet('/admin/denuncias');

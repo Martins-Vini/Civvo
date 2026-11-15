@@ -21,7 +21,7 @@ const adaptApi = {
   ong: (r) => ({
     id: r.ong_id,
     name: r.ong_nome || 'ONG',
-    logo: r.ong_logo || '',
+    logo: r.ong_logo || r.ong_avatar || '',
     cnpj: r.ong_cnpj || '',
     cat: '',
     city: '',
@@ -38,6 +38,8 @@ const adaptApi = {
   }),
 
   momento: (r) => ({
+    id: r.id ?? null,
+    criado: r.created_at ? new Date(r.created_at).getTime() : 0,
     src: r.media_url,
     caption: r.caption || '',
     exp: r.expires_at ? new Date(r.expires_at).getTime() : 0,
@@ -126,12 +128,14 @@ function aplicarFeedReal(feed, curtidas, candidaturas, momentos = []) {
 
 async function buscarFeedReal() {
   const opcional = (p) => p.catch(() => []);
-  const [feed, curtidas, candidaturas, momentos, seguidas] = await Promise.all([
+  const [feed, curtidas, candidaturas, momentos, seguidas, vistos, meuPerfil] = await Promise.all([
     API.listarFeed(),
     opcional(API.historicoCurtidas()),
     ROLE == 'doador' ? opcional(API.historicoVoluntariado()) : Promise.resolve([]),
     opcional(API.listarMomentos()),
     opcional(API.minhasOngsSeguidas()),
+    opcional(API.momentosVistos()),
+    ROLE == 'admin' ? Promise.resolve(null) : opcional(API.meuPerfil()),
   ]);
 
   if (!Array.isArray(feed)) throw new Error('Resposta inesperada do servidor.');
@@ -141,6 +145,13 @@ async function buscarFeedReal() {
 
   FOLLOW.clear();
   lista(seguidas).forEach((x) => FOLLOW.add(Number(x)));
+
+  /* momentos que eu já vi (moldura cinza) */
+  MOM_VISTOS.clear();
+  lista(vistos).forEach((x) => MOM_VISTOS.add('m' + x));
+
+  /* meus dados salvos no banco (perfil, foto, capa, pendências) */
+  if (meuPerfil && !Array.isArray(meuPerfil) && meuPerfil.tipo) aplicarMeuPerfil(meuPerfil);
 }
 
 const atualizarFeedReal = buscarFeedReal;

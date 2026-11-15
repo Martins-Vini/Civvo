@@ -16,7 +16,7 @@ const NAV = {
     ['chats', 'chat', 'Chats'],
     ['avisos', 'bell', 'Avisos'],
     ['painel', 'dash', 'Painel'],
-    ['perfil', 'user', 'Perfil'],
+    ['perfil', 'user', 'Perfil', () => !DEMO && typeof pendenciasOng == 'function' && pendenciasOng().length > 0],
     ['config', 'gear', 'Config'],
   ],
   admin: [
