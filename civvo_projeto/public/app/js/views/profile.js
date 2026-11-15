@@ -183,11 +183,196 @@ const tags = (s) =>
     .map((c) => `<span class="tag" style="margin:0 6px 6px 0">${esc(c.trim())}</span>`)
     .join('');
 
+/* =====================================================================
+   PERFIL REAL: dados completos da ONG, ampliar foto e pendências
+   ===================================================================== */
+const ONG_PERFIL = {}; /* id da ONG -> { dados, ts } (dados vindos do banco) */
+const PERFIL_BUSY = new Set();
+
+/* resposta do back (ONG) -> campos que o app usa nos objetos de ONG */
+function dadosOng(p) {
+  const e = p.endereco || {};
+  const d = {
+    name: p.nome_fantasia,
+    razao: p.razao_social,
+    cnpj: p.cnpj,
+    cnae: p.cnae || '',
+    bio: p.historia || '',
+    cat: p.causas_atendidas || '',
+    city: p.cidade || e.cidade || '',
+    logo: p.logo_url || '',
+    banner: p.banner_url || '',
+    bannerCor: p.banner_cor || '',
+    estatuto: { missao: p.missao || '', objetivos: p.objetivos || '', gestao: p.gestao || '' },
+    governanca: String(p.governanca || '').split(',').map((x) => x.trim()).filter(Boolean),
+    transp: p.nivel_transparencia || '',
+    social: p.redes || {},
+  };
+  if (p.chave_pix !== undefined) d.pix = p.chave_pix || '';
+  if (p.endereco !== undefined) d.end = { cep: e.cep || '', estado: e.estado || '', rua: e.rua || '', bairro: e.bairro || '', cidade: e.cidade || '' };
+  return d;
+}
+
+function carregarPerfilOng(id) {
+  if (PERFIL_BUSY.has(id)) return;
+  PERFIL_BUSY.add(id);
+
+  API.perfilOngPublico(id)
+    .then((r) => {
+      ONG_PERFIL[id] = { dados: dadosOng(r), ts: Date.now() };
+    })
+    .catch((e) => {
+      console.error('Falha ao carregar o perfil da ONG:', e);
+      /* marca o horário mesmo no erro, para não tentar em loop */
+      ONG_PERFIL[id] = { dados: (ONG_PERFIL[id] && ONG_PERFIL[id].dados) || {}, ts: Date.now() };
+    })
+    .finally(() => {
+      PERFIL_BUSY.delete(id);
+      if (/^#\/(ong|perfil)/.test(location.hash)) go();
+    });
+}
+
+/* ---- pendências do perfil da ONG ---- */
+const PEND_TOTAL = 13;
+
+function pendenciasOng(p = typeof PERFIL_ME !== 'undefined' ? PERFIL_ME : null) {
+  if (!p || p.tipo !== 'ONG') return [];
+  const vazio = (v) => !String(v ?? '').trim();
+  const temRede = Object.values(p.redes || {}).some((u) => String(u || '').trim());
+
+  return [
+    ['epFoto', 'camera', 'Foto de perfil', !p.logo_url],
+    ['epCapa', 'palette', 'Capa do perfil', !p.banner_url && !p.banner_cor],
+    ['epBio', 'file-text', 'Nossa história', vazio(p.historia)],
+    ['epCausas', 'heart', 'Causas atendidas', vazio(p.causas_atendidas)],
+    ['epCnae', 'building-2', 'CNAE', vazio(p.cnae)],
+    ['epPix', 'wallet', 'Chave Pix', vazio(p.chave_pix)],
+    ['epMis', 'target', 'Missão', vazio(p.missao)],
+    ['epObj', 'target', 'Objetivos', vazio(p.objetivos)],
+    ['epGes', 'users', 'Gestão', vazio(p.gestao)],
+    ['epGov', 'users', 'Pessoas governadoras', vazio(p.governanca)],
+    ['epCep', 'map-pin', 'Endereço', !p.endereco],
+    ['epDdd', 'phone', 'Telefone', !p.telefone],
+    ['epS_instagram', 'link', 'Redes sociais', !temRede],
+  ]
+    .filter((i) => i[3])
+    .map(([campo, icone, rotulo]) => ({ campo, icone, rotulo }));
+}
+
+function pendCard(acao = 'irEditar') {
+  if (typeof PERFIL_ME === 'undefined' || !PERFIL_ME) return '';
+  const lista = pendenciasOng();
+
+  if (!lista.length) {
+    return `<div class="pend ok" role="status">${lc('circle-check', 22)}<div><b>Perfil completo!</b><small>Sua ONG está com todas as informações preenchidas.</small></div></div>`;
+  }
+
+  const feitos = PEND_TOTAL - lista.length;
+  const pct = Math.round((feitos / PEND_TOTAL) * 100);
+
+  return `
+    <div class="pend" role="alert">
+      <div class="pend-top">
+        ${lc('triangle-alert', 24)}
+        <div>
+          <b>Perfil incompleto: ${lista.length} ${lista.length > 1 ? 'pendências' : 'pendência'}</b>
+          <small>Perfis completos passam mais confiança para quem quer doar.</small>
+        </div>
+        <span class="pend-pct">${pct}%</span>
+      </div>
+      <div class="pend-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><b style="width:${pct}%"></b></div>
+      <div class="pend-chips">
+        ${lista.map((i) => `<button class="pend-chip" onclick="${acao}('${i.campo}')">${lc(i.icone, 15)}<span>${i.rotulo}</span></button>`).join('')}
+      </div>
+    </div>`;
+}
+
+/* abre a edição já focando no campo pendente */
+function irEditar(campo) {
+  EPF_FOCO = campo;
+  location.hash = '#/editar-perfil';
+}
+
+/* ---- ampliar foto (perfil e capa) ---- */
+function abrirFoto(url, titulo, circular) {
+  if (!url) return;
+  document.getElementById('fx')?.remove();
+
+  const d = document.createElement('div');
+  d.id = 'fx';
+  d.className = 'fx';
+  d.setAttribute('role', 'dialog');
+  d.setAttribute('aria-modal', 'true');
+  d.setAttribute('aria-label', titulo || 'Foto');
+  d.innerHTML = `<button class="fx-x" aria-label="Fechar" title="Fechar">${lc('x', 26)}</button><img alt="">`;
+
+  const img = d.querySelector('img');
+  img.src = url;
+  img.alt = titulo || '';
+  if (circular) img.classList.add('circ');
+
+  const fechar = () => {
+    document.removeEventListener('keydown', tecla);
+    d.remove();
+  };
+  const tecla = (e) => {
+    if (e.key === 'Escape') fechar();
+  };
+
+  d.addEventListener('click', (e) => {
+    if (e.target !== img) fechar();
+  });
+  document.addEventListener('keydown', tecla);
+  document.body.appendChild(d);
+  d.querySelector('.fx-x').focus();
+}
+
+function abrirFotoEl(el) {
+  abrirFoto(el.dataset.foto, el.dataset.nome, el.dataset.circ === '1');
+}
+
+(() => {
+  if (document.getElementById('civvo-pf-css')) return;
+  const st = document.createElement('style');
+  st.id = 'civvo-pf-css';
+  st.textContent = `
+    .pf-zoom{display:contents}
+    .pf-zoom > *{cursor:zoom-in}
+    .fx{position:fixed;inset:0;z-index:2200;display:grid;place-items:center;background:rgba(0,0,0,.92);animation:mvIn .18s ease;padding:16px}
+    .fx img{max-width:min(94vw,1100px);max-height:90vh;object-fit:contain;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,.6)}
+    .fx img.circ{width:min(86vw,520px);height:min(86vw,520px);object-fit:cover;border-radius:50%}
+    .fx-x{position:fixed;top:14px;right:16px;width:40px;height:40px;border-radius:50%;border:0;background:rgba(255,255,255,.16);color:#fff;display:grid;place-items:center;cursor:pointer}
+    .fx-x:hover{background:rgba(255,255,255,.28)}
+
+    .pend{margin-top:16px;border:1px solid rgba(245,158,11,.55);background:rgba(245,158,11,.09);border-radius:14px;padding:14px 16px}
+    .pend.ok{display:flex;gap:12px;align-items:center;border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.09);color:#22c55e}
+    .pend.ok small{display:block;color:var(--mut);font-weight:400}
+    .pend-top{display:flex;align-items:center;gap:12px;color:#f59e0b}
+    .pend-top svg{flex:none}
+    .pend-top div{flex:1;min-width:0}
+    .pend-top b{display:block;color:inherit}
+    .pend-top small{display:block;color:var(--mut);font-weight:400;margin-top:2px}
+    .pend-pct{font-weight:700;font-size:18px}
+    .pend-bar{height:6px;border-radius:6px;background:rgba(127,127,127,.25);overflow:hidden;margin:12px 0}
+    .pend-bar b{display:block;height:100%;background:#f59e0b;border-radius:6px}
+    .pend-chips{display:flex;flex-wrap:wrap;gap:8px}
+    .pend-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(245,158,11,.6);background:transparent;color:inherit;border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
+    .pend-chip svg{color:#f59e0b}
+    .pend-chip:hover{background:rgba(245,158,11,.16)}
+  `;
+  document.head.appendChild(st);
+})();
+
 const kv = (k, v) =>
   `<div class="kv"><small>${k}</small><b>${v ? esc(v) : 'Não informado'}</b></div>`;
 
-function profile(name, h, bio, meta, sections, owner, social, cover, avatar) {
-  const coverStyle = cover ? `style="background:url('${esc(cover)}') center/cover"` : '';
+function profile(name, h, bio, meta, sections, owner, social, cover, avatar, momOng, capaCor) {
+  const corOk = /^#[0-9a-f]{6}$/i.test(capaCor || '') ? capaCor : '';
+  const coverStyle = cover
+    ? `style="background:url('${esc(cover)}') center/cover;cursor:zoom-in" data-foto="${esc(cover)}" data-nome="${esc(name)}" onclick="abrirFotoEl(this)" role="button" tabindex="0" aria-label="Ampliar capa de ${esc(name)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();abrirFotoEl(this)}"`
+    : corOk
+    ? `style="background:${corOk}"`
+    : '';
   const verifiedBadge = (ONGS.find((x) => x.name == name) || {}).ver ? VER : '';
   
   const metaHtml = meta
@@ -210,7 +395,13 @@ function profile(name, h, bio, meta, sections, owner, social, cover, avatar) {
     <div class="card">
       <div class="cover" ${coverStyle}></div>
       <div class="pf">
-        ${av(name, h, 104, avatar)}
+        ${
+          momOng
+            ? `<div class="pf-story ${momOng.vistos ? 'seen' : ''}" role="button" tabindex="0" aria-label="Ver momentos de ${esc(name)}" onclick="abrirMomentos(${momOng.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();abrirMomentos(${momOng.id})}">${av(name, h, 104, avatar)}</div>`
+            : avatar
+            ? `<div class="pf-zoom" data-foto="${esc(avatar)}" data-nome="${esc(name)}" data-circ="1" onclick="abrirFotoEl(this)">${av(name, h, 104, avatar)}</div>`
+            : av(name, h, 104, avatar)
+        }
         <h1>${esc(name)}${verifiedBadge}</h1>
         <p style="color:var(--mut);margin-top:6px">${esc(bio)}</p>
         <div class="meta">${metaHtml}</div>
@@ -224,6 +415,9 @@ function profile(name, h, bio, meta, sections, owner, social, cover, avatar) {
 
 V.perfil = () => {
   if (ROLE == 'ong') return V.ong(meOng().id);
+
+  /* garante os dados salvos no banco (caso a carga junto com o feed tenha falhado) */
+  if (!DEMO && !PERFIL_ME && !PERFIL_CARR && !PERFIL_ERRO) carregarMeuPerfil();
 
   const ap = DONATIONS.filter((d) => d.status == 'APROVADO').length;
 
@@ -255,7 +449,10 @@ V.perfil = () => {
         ['ONGs apoiadas', apoiosContent, 1],
         ['Histórico de doações', doacoesContent, 0],
       ]
-    : [['Histórico de doações', '<p class="emp">O histórico de doações estará disponível em breve.</p>', 0]];
+    : [
+        ['Causas de interesse', causasContent, 0],
+        ['Histórico de doações', '<p class="emp">O histórico de doações estará disponível em breve.</p>', 0],
+      ];
 
   sections.push(['', blocoExcluirConta(), 0]);
 
@@ -265,7 +462,7 @@ V.perfil = () => {
     [FOLLOW.size, 'seguindo', "abrirLista('seguindo', null)"],
   ];
 
-  const owner = '<div class="acts"><a class="btn ghost sm" href="#/editar-perfil">Editar perfil</a></div>';
+  const owner = `<div class="acts"><a class="btn ghost sm" href="#/editar-perfil">${lc('pencil', 16)} Editar perfil</a></div>`;
 
   return shell(
     profile(
@@ -277,7 +474,9 @@ V.perfil = () => {
       owner,
       USER.social,
       USER.banner_url || '',
-      USER.avatar_url
+      USER.avatar_url,
+      null,
+      USER.bannerCor || ''
     ),
     'perfil',
     { rightCol: 0, wide: 1 }
@@ -372,6 +571,11 @@ V.ong = (id, sec = 'publicacoes') => {
     });
   }
 
+  /* dados completos da ONG (história, causas, capa, redes…) vindos do banco */
+  const pf = ONG_PERFIL[o.id];
+  if (pf) Object.assign(o, pf.dados);
+  if (!DEMO && (!pf || Date.now() - pf.ts > 60000)) carregarPerfilOng(o.id);
+
   const ps = POSTS.filter((p) => p.ong == o.id);
   const cps = ps.filter((p) => p.camp);
   const op = cps.find((p) => p.camp.status != 'ENCERRADA');
@@ -380,7 +584,7 @@ V.ong = (id, sec = 'publicacoes') => {
   const me = o.id == ME_ONG;
 
   const acts = me
-    ? '<div class="acts"><a class="btn ghost sm" href="#/editar-perfil">Editar perfil</a></div>'
+    ? `<div class="acts"><a class="btn ghost sm" href="#/editar-perfil">${lc('pencil', 16)} Editar perfil</a></div>${!DEMO && ROLE == 'ong' ? pendCard() : ''}`
     : `<div class="acts">
          <a class="btn sm" href="${op ? '#/doar/' + op.id : '#'}" ${op ? '' : 'aria-disabled="true"'}>Doar</a>
          <button class="btn light sm" data-fo="${o.id}" ${EB()} aria-pressed="${f}" onclick="toggleSet(FOLLOW, ${o.id})">${f ? 'Seguindo' : 'Seguir'}</button>
@@ -410,6 +614,10 @@ V.ong = (id, sec = 'publicacoes') => {
 
   if (me && ROLE == 'ong') sections.push(['', blocoExcluirConta(), 0]);
 
+  /* ONG com momentos no ar: a foto vira o botão que abre os momentos (com moldura) */
+  const gm = momGroups().find((g) => g.o == o.id);
+  const momOng = gm ? { id: o.id, vistos: gm.vistos } : null;
+
   return shell(
     profile(
       o.name,
@@ -419,7 +627,10 @@ V.ong = (id, sec = 'publicacoes') => {
       sections,
       acts,
       o.social,
-      o.banner
+      o.banner,
+      o.logo,
+      momOng,
+      o.bannerCor || ''
     ),
     me ? 'perfil' : 'buscar',
     { rightCol: 0, wide: 1 }

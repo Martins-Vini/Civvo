@@ -38,6 +38,10 @@ const donoDoPostPodeExcluir = (pid) => {
 
 let EDITING_COMMENT = null;
 
+/* botão só com ícone (com texto alternativo para leitores de tela e dica ao passar o mouse) */
+const btnIcone = (icone, titulo, onclick, cls = '') =>
+  `<button class="lk ic-btn ${cls}" title="${titulo}" aria-label="${titulo}" onclick="${onclick}">${lc(icone, 17)}</button>`;
+
 const branch = (id) => {
   const ids = new Set([id]);
   let ch = true;
@@ -61,6 +65,7 @@ const nest = (pid, parent = null, d = 0) => {
       const marginLeft = Math.min(d, 3) * 18;
       const souDono = souAutorComentario(c);
       const podeExcluir = souDono || donoDoPostPodeExcluir(pid);
+      const podeDenunciar = !souDono;
       const estaEditando = EDITING_COMMENT == c.id;
 
       const corpoHtml = estaEditando
@@ -70,9 +75,12 @@ const nest = (pid, parent = null, d = 0) => {
              <button class="lk" style="margin-left:10px" onclick="cancelarEdicaoComentario(${pid})">Cancelar</button>
            </div>`
         : `<p>${esc(c.text)}${c.editado ? ' <small style="color:var(--mut)">(editado)</small>' : ''}</p>
-           <button class="lk" style="margin:0 12px 0 0" onclick="replyTo(${c.id})">Responder</button>
-           ${souDono ? `<button class="lk" style="margin:0 12px 0 0" onclick="iniciarEdicaoComentario(${c.id})">Editar</button>` : ''}
-           ${podeExcluir ? `<button class="lk" style="margin:0" onclick="askDelComment(${c.id}, ${pid})">Excluir</button>` : ''}`;
+           <div class="cm-acts" style="margin-top:2px">
+             ${btnIcone('reply', 'Responder', `replyTo(${c.id})`)}
+             ${souDono ? btnIcone('pencil', 'Editar', `iniciarEdicaoComentario(${c.id})`) : ''}
+             ${podeExcluir ? btnIcone('trash-2', 'Excluir', `askDelComment(${c.id}, ${pid})`, 'bad') : ''}
+             ${podeDenunciar ? btnIcone('flag', 'Denunciar', `openReportComment(${c.id}, ${pid})`, 'bad') : ''}
+           </div>`;
 
       return `
         <div class="cmt ${isRep}" style="margin-left:${marginLeft}px">
@@ -121,30 +129,82 @@ async function salvarEdicaoComentario(id, pid, btn) {
 }
 
 function askDelComment(id, pid) {
+  const respostas = branch(id).size - 1;
+  const aviso = respostas > 0
+    ? `Este comentário tem ${respostas} ${respostas > 1 ? 'respostas' : 'resposta'}, que também ${respostas > 1 ? 'serão excluídas' : 'será excluída'}.`
+    : 'Esta ação não pode ser desfeita.';
+
   openModal(
     `<h3>Excluir comentário?</h3>
-     <p style="margin:8px 0 16px">Esta ação não pode ser desfeita.</p>
+     <p style="margin:8px 0 16px">${aviso}</p>
      <button class="btn full" style="background:var(--bad)" onclick="delComment(${id}, ${pid}, this)">Excluir definitivamente</button>`,
     'Excluir comentário'
   );
 }
 
 async function delComment(id, pid, btn) {
+  /* o comentário + todas as respostas dele (cascata) */
+  const ids = branch(id);
+
   const ok = await comEspera(btn, 'Excluindo…', async () => {
     if (!DEMO) await window.CivvoApi.excluirComentario(pid, id);
 
-    const idx = COMMENTS.findIndex((x) => x.id == id);
-    if (idx >= 0) COMMENTS.splice(idx, 1);
+    let removidos = 0;
+    for (let i = COMMENTS.length - 1; i >= 0; i--) {
+      if (COMMENTS[i].post == pid && ids.has(COMMENTS[i].id)) {
+        COMMENTS.splice(i, 1);
+        removidos++;
+      }
+    }
 
-    bump(POSTS.find((x) => x.id == pid), -1);
+    bump(POSTS.find((x) => x.id == pid), -removidos);
   });
 
   if (!ok) return;
 
-  if (EDITING_COMMENT == id) EDITING_COMMENT = null;
+  if (EDITING_COMMENT != null && ids.has(EDITING_COMMENT)) EDITING_COMMENT = null;
+  if (RPL && ids.has(RPL.id)) RPL = null;
   closeModal();
   toast('Comentário excluído.');
   drawComments(pid);
+}
+
+/* ---- Denunciar comentário ---- */
+const MOTIVOS_DEN = [
+  'Spam ou propaganda',
+  'Ofensa, assédio ou discurso de ódio',
+  'Conteúdo impróprio',
+  'Informação falsa',
+  'Outro motivo',
+];
+
+function openReportComment(id, pid) {
+  const opts = MOTIVOS_DEN.map((m) => `<option>${m}</option>`).join('');
+  openModal(
+    `<h3>Denunciar comentário</h3>
+     <label for="rcMot" style="margin-top:0">Motivo</label>
+     <select id="rcMot" class="in">${opts}</select>
+     <label for="rcDet">Detalhes (opcional)</label>
+     <textarea id="rcDet" class="in" rows="3" maxlength="150" placeholder="Conte o que aconteceu"></textarea>
+     <p class="dn-err" id="rcErr" role="alert"></p>
+     <button class="btn full" onclick="sendReportComment(${id}, this)">Enviar denúncia</button>`,
+    'Denunciar'
+  );
+}
+
+async function sendReportComment(id, btn) {
+  const mot = $('#rcMot').value;
+  const det = $('#rcDet').value.trim();
+  const motivo = (det ? `${mot}: ${det}` : mot).slice(0, 225);
+
+  const ok = await comEspera(btn, 'Enviando…', async () => {
+    if (!DEMO) await window.CivvoApi.denunciarComentario(id, motivo);
+  });
+
+  if (!ok) return;
+
+  closeModal();
+  toast('Denúncia enviada. Obrigado por ajudar a manter a Civvo segura.');
 }
 
 async function carregarComentariosReais(pid) {

@@ -145,5 +145,20 @@ function roteia() {
   carregarApp();
 }
 
+// Lucide (lucide-static): carrega só os ícones que o app usa
+const lucide = import.meta.glob(
+  '/node_modules/lucide-static/icons/{x,plus,pause,play,ellipsis,more-horizontal,trash-2,send,chevron-left,chevron-right,reply,pencil,flag,heart,camera,message-circle}.svg',
+  { query: '?raw', import: 'default', eager: true }
+);
+
+window.LUCIDE_SVG = (nome) => {
+  const nomes = [nome, nome === 'ellipsis' ? 'more-horizontal' : null].filter(Boolean);
+  for (const n of nomes) {
+    const chave = Object.keys(lucide).find((k) => k.endsWith('/' + n + '.svg'));
+    if (chave) return lucide[chave];
+  }
+  return '';
+};
+
 addEventListener('hashchange', roteia);
 roteia();
