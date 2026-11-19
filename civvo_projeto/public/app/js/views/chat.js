@@ -154,9 +154,11 @@ function chatItensHtml() {
 
   const dica = !ChatBackend.disponivel
     ? 'O chat estará disponível em breve. Quando estiver pronto, suas conversas aparecem aqui.'
-    : ROLE == 'ong'
-      ? 'Quando um doador falar com você, a conversa aparece aqui.'
-      : 'Converse com as ONGs que você apoia.';
+    : !temRecurso('chat')
+      ? `Quando ${ROLE == 'ong' ? 'um doador' : 'uma ONG'} falar com você, a conversa aparece aqui e você pode responder. Para iniciar conversas, conheça o plano ${NOME_PLANO[PLANO_PAGO[ROLE]]}.`
+      : ROLE == 'ong'
+        ? 'Inicie uma conversa com um doador ou responda quem escrever.'
+        : 'Converse com as ONGs que você apoia.';
 
   return `<div class="emp chat-emp">${ic('chat')}<p><b>Nenhuma conversa ainda</b></p><p>${dica}</p></div>`;
 }
@@ -513,6 +515,9 @@ function chatTocar(id) {
 /* ---------- nova conversa ---------- */
 
 async function chatNovaConversa() {
+  /* plano pago inicia conversas; no gratuito dá para responder quem escreveu (ver views/plans.js) */
+  if (!temRecurso('chat')) return upsell('chat');
+
   openModal('<h3>Nova conversa</h3><div id="chatContatos" role="status">Carregando…</div>', 'Nova conversa');
 
   try {

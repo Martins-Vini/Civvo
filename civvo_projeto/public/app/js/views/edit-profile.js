@@ -84,6 +84,14 @@ function aplicarMeuPerfil(p) {
   PERFIL_ME = p;
 
   if (p.tipo === 'ONG') {
+    /* Quem sou eu como ONG: o login nem sempre devolve ongProfileId, mas o perfil sempre traz ong_id.
+       Sem isso, ME_ONG fica nulo/0 e a ONG não é reconhecida como dona das próprias publicações
+       (some o "Gerenciar" e o botão de excluir comentários de outras pessoas). */
+    if (p.ong_id != null && ME_ONG != p.ong_id) {
+      const falso = ONGS.findIndex((x) => x.id === 0 && x.name === 'Sua ONG');
+      if (falso >= 0) ONGS.splice(falso, 1);
+      ME_ONG = p.ong_id;
+    }
     const dados = dadosOng(p);
     ONG_PERFIL[p.ong_id] = { dados, ts: Date.now() };
     let o = ONGS.find((x) => x.id == p.ong_id);
@@ -104,8 +112,8 @@ function aplicarMeuPerfil(p) {
       apelido_unico: p.apelido_unico,
       cpf: p.cpf || '',
       bio: p.bio || '',
-      avatar_url: p.avatar_url || '',
-      banner_url: p.banner_url || '',
+      avatar_url: imgOk(p.avatar_url),
+      banner_url: imgOk(p.banner_url),
       bannerCor: p.banner_cor || '',
       causas: Array.isArray(p.causas) ? p.causas : [],
       social: p.redes || {},
@@ -113,6 +121,10 @@ function aplicarMeuPerfil(p) {
       tel: { ddd: t.ddd || '', numero: t.numero || '', whats: !!t.whats },
       voluntariadosPublicos: p.voluntariados_publicos,
     });
+    /* chave Pix do doador (remetente): no modo real o back guarda uma só, em chave_pix */
+    if (p.chave_pix !== undefined) {
+      USER.pix = p.chave_pix ? [{ id: 1, tipo: pixTipo(p.chave_pix) || 'Chave', chave: p.chave_pix }] : [];
+    }
   }
 }
 
@@ -188,9 +200,9 @@ function epVol(mostrar, b) {
 /* ---------- identidade do perfil que está sendo editado ---------- */
 const epIdentidade = () => {
   const p = PERFIL_ME;
-  if (p.tipo === 'ONG') return { nome: $('#epNome')?.value.trim() || p.nome_fantasia, h: (p.ong_id * 70) % 360, url: p.logo_url };
+  if (p.tipo === 'ONG') return { nome: $('#epNome')?.value.trim() || p.nome_fantasia, h: (p.ong_id * 70) % 360, url: imgOk(p.logo_url) };
   const nome = `${$('#epNome')?.value.trim() || p.nome} ${$('#epSob')?.value.trim() || p.sobrenome}`.trim();
-  return { nome, h: 200, url: p.avatar_url };
+  return { nome, h: 200, url: imgOk(p.avatar_url) };
 };
 
 function epAtualizarAvatar() {
@@ -207,13 +219,13 @@ function epPintarCapa() {
   const el = $('#epCoverPrev');
   if (!el || !EPF) return;
 
-  const foto = EPF.fotoCapa && !EPF.removerFoto ? PERFIL_ME.banner_url : '';
+  const foto = EPF.fotoCapa && !EPF.removerFoto ? imgOk(PERFIL_ME.banner_url) : '';
   if (foto) {
     el.style.background = `url("${String(foto).replace(/"/g, '%22')}") center/cover`;
   } else if (EPF.cor) {
     el.style.background = EPF.cor;
   } else {
-    el.style.background = '';
+    el.style.background = 'linear-gradient(135deg,#2d4f61,#39677e)'; /* padrão: azul do Civvo */
   }
 
   document.querySelectorAll('.ep-cor[data-cor]').forEach((b) => {
@@ -494,7 +506,7 @@ function editarPerfilReal() {
       ref: p,
       alvo: 'avatar',
       cor: p.banner_cor || '',
-      fotoCapa: !!p.banner_url,
+      fotoCapa: !!imgOk(p.banner_url),
       removerFoto: false,
       causas: new Set(ehOng ? splitCausas(p.causas_atendidas) : Array.isArray(p.causas) ? p.causas : []),
       vol: p.voluntariados_publicos !== false,
@@ -552,7 +564,10 @@ function editarPerfilReal() {
           FI('epCnpj', 'lock', 'CNPJ (não editável)', p.cnpj, { x: 'disabled' }) +
           FI('epCnae', 'building-2', 'CNAE', p.cnae, { falta: pend.has('epCnae') }) +
           TI('epBio', 'file-text', 'Nossa história', p.historia, { rows: 4, falta: pend.has('epBio'), max: 5000 }) +
-          FI('epPix', 'wallet', 'Chave Pix', p.chave_pix, { falta: pend.has('epPix') }),
+          FI('epPix', 'wallet', 'Chave Pix para receber doações', p.chave_pix, {
+          falta: pend.has('epPix'),
+          dica: 'CPF, CNPJ, e-mail, celular com DDD ou chave aleatória. É a chave que os doadores veem ao doar por Pix.',
+        }),
         cont('epCnae', 'epBio', 'epPix')
       ) +
       grpI(
@@ -578,7 +593,14 @@ function editarPerfilReal() {
           TI('epBio', 'file-text', 'Bio', p.bio, { rows: 4, max: 1000 }) +
           FI('epCpf', 'lock', 'CPF (opcional)', p.cpf, { x: 'inputmode="numeric" maxlength="14"', dica: 'Usado para identificar suas doações no comprovante e no IRPF.' })
       ) +
-      grpI('heart', 'Causas de interesse', chipsCausas());
+      grpI('heart', 'Causas de interesse', chipsCausas()) +
+      grpI(
+        'wallet',
+        'Pix (remetente)',
+        FI('epPix', 'wallet', 'Chave Pix', p.chave_pix, {
+          dica: 'A chave da conta de onde você envia as doações (CPF, e-mail, celular com DDD ou chave aleatória). Deixe vazio se não quiser cadastrar.',
+        })
+      );
 
   const endereco = grpI(
     'map-pin',
@@ -665,6 +687,8 @@ async function saveProfileReal(btn) {
   const ehOng = p.tipo === 'ONG';
   const d = {};
 
+  if (v('epPix') && !pixTipo(v('epPix'))) return falha(PIX_ERRO, 'epPix');
+
   if (ehOng) {
     if (!v('epNome')) return falha('Informe o nome da ONG.', 'epNome');
     Object.assign(d, {
@@ -694,6 +718,7 @@ async function saveProfileReal(btn) {
       bio: v('epBio'),
       causas: [...EPF.causas],
       voluntariados_publicos: EPF.vol,
+      chave_pix: v('epPix'),
     });
   }
 
@@ -755,7 +780,7 @@ async function saveProfileReal(btn) {
     .ep-badge{margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#f59e0b;background:rgba(245,158,11,.13);padding:3px 9px;border-radius:999px}
     .ep-badge .lc{color:#f59e0b}
     .ep-prev{position:relative;margin-bottom:60px}
-    .ep-cover{height:150px;border-radius:12px;background:#39677e}
+    .ep-cover{height:150px;border-radius:12px;background:linear-gradient(135deg,#2d4f61,#39677e)}
     .ep-avwrap{position:absolute;left:18px;bottom:-52px}
     .ep-avwrap #epAv{border-radius:50%;border:4px solid var(--bg,#000);display:inline-block;line-height:0}
     .ep-cam{position:absolute;right:-2px;bottom:-2px;width:34px;height:34px;border-radius:50%;border:2px solid var(--bg,#000);background:#b7e7ff;color:#0b1a22;display:grid;place-items:center;cursor:pointer;padding:0}
@@ -804,7 +829,7 @@ V['editar-perfil'] = () => {
       F('eCnae', 'CNAE', o.cnae || '') +
       TA('eBio', 'Nossa história', o.bio || '', 4) +
       F('eCat', 'Causas atendidas (separe por vírgula)', o.cat || '') +
-      F('ePix', 'Chave Pix', o.pix || '') +
+      F('ePix', 'Chave Pix para receber doações', o.pix || '') +
       IMG('eLogo', 'Logo', o.logo) +
       IMG('eBan', 'Banner (capa)', o.banner)
     : `<div class="row2"><div>${F('eNome', 'Nome', USER.nome)}</div><div>${F('eSob', 'Sobrenome', USER.sobrenome)}</div></div>` +
@@ -896,6 +921,11 @@ async function saveProfile(btn) {
   }
   if (v('eUf') && !/^[A-Za-z]{2}$/.test(v('eUf'))) {
     e.textContent = 'O estado deve ter 2 letras (UF).';
+    return;
+  }
+
+  if (ong && v('ePix') && !pixTipo(v('ePix'))) {
+    e.textContent = PIX_ERRO;
     return;
   }
 

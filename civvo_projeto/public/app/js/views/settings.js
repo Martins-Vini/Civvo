@@ -1,6 +1,7 @@
 /* Configurações. */
 
-const PIX_T = ['CPF', 'E-mail', 'Celular', 'Chave aleatória'];
+/* Tipos de chave Pix aceitos pelo Banco Central. */
+const PIX_T = ['CPF', 'CNPJ', 'E-mail', 'Celular', 'Chave aleatória'];
 
 const bandeira = (n) => {
   if (/^4/.test(n)) return 'Visa';
@@ -26,50 +27,140 @@ const luhn = (n) => {
   return s % 10 == 0;
 };
 
+const soDigitos = (v) => String(v || '').replace(/\D/g, '');
+
+/* dígitos verificadores de CPF e CNPJ (uma chave errada manda o dinheiro para o lugar errado) */
+function cpfOk(v) {
+  const d = soDigitos(v);
+  if (d.length != 11 || /^(\d)\1+$/.test(d)) return false;
+  for (const n of [9, 10]) {
+    let soma = 0;
+    for (let i = 0; i < n; i++) soma += +d[i] * (n + 1 - i);
+    if (((soma * 10) % 11) % 10 != +d[n]) return false;
+  }
+  return true;
+}
+
+function cnpjOk(v) {
+  const d = soDigitos(v);
+  if (d.length != 14 || /^(\d)\1+$/.test(d)) return false;
+  for (const n of [12, 13]) {
+    let soma = 0;
+    let pes = n - 7;
+    for (let i = 0; i < n; i++) {
+      soma += +d[i] * pes--;
+      if (pes < 2) pes = 9;
+    }
+    if (((soma % 11) < 2 ? 0 : 11 - (soma % 11)) != +d[n]) return false;
+  }
+  return true;
+}
+
+/* celular com DDD (10 ou 11 dígitos), com ou sem +55 */
+const celularOk = (v) => {
+  let d = soDigitos(v);
+  if (d.length >= 12 && d.startsWith('55')) d = d.slice(2);
+  return /^[1-9]{2}9?\d{8}$/.test(d);
+};
+
 const pixOk = (t, v) => {
-  if (t == 'CPF') return v.replace(/\D/g, '').length == 11;
-  if (t == 'E-mail') return /^\S+@\S+\.\S+$/.test(v);
-  if (t == 'Celular') return /^\d{10,11}$/.test(v.replace(/\D/g, ''));
+  v = String(v || '').trim();
+  if (t == 'CPF') return cpfOk(v);
+  if (t == 'CNPJ') return cnpjOk(v);
+  if (t == 'E-mail') return /^\S+@\S+\.\S+$/.test(v) && v.length <= 77;
+  if (t == 'Celular') return celularOk(v);
   return /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(v);
 };
 
+/* descobre o tipo pelo formato (para campos de texto livre); null = chave inválida */
+const pixTipo = (v) => PIX_T.find((t) => pixOk(t, v)) || null;
+
+const PIX_ERRO = 'Chave Pix inválida. Use CPF, CNPJ, e-mail, celular com DDD ou chave aleatória.';
+
+/* mostra só o começo e o fim de dados pessoais (comprovante e listas) */
+function pixMascara(chave, tipo) {
+  const c = String(chave || '');
+  if (tipo == 'E-mail') {
+    const [u, d] = c.split('@');
+    return `${u.slice(0, 2)}***@${d}`;
+  }
+  if (tipo == 'Chave aleatória') return `${c.slice(0, 8)}…${c.slice(-4)}`;
+  const d = soDigitos(c);
+  return d.length > 4 ? `${'•'.repeat(d.length - 4)}${d.slice(-4)}` : c;
+}
+
+/* Pix da ONG (recebimento): uma chave só, a que o doador vê ao doar. */
+const pixDaOng = () => {
+  const o = meOng();
+  const k = String(o.pix || '').trim();
+  return k ? { tipo: pixTipo(k) || 'Chave', chave: k } : null;
+};
+
+/* Pix do doador (remetente): lista de chaves de onde ele envia as doações. */
+const pixDoDoador = () => USER.pix || [];
+
 function addPix() {
-  if (!DEMO) return emBreve('Cadastro de chaves Pix estará disponível em breve.');
+  const ong = ROLE == 'ong';
+
+  /* modo real: a chave vive no perfil (PUT /perfil/me, campo chave_pix); abre a edição já no campo */
+  if (!DEMO) return irEditar('epPix');
+
   const optionsHtml = PIX_T.map((t) => `<option>${t}</option>`).join('');
-  
+  const atual = ong ? pixDaOng() : null;
+
   openModal(
-    `<h3>Adicionar chave Pix</h3>
+    `<h3>${ong ? (atual ? 'Alterar chave Pix de recebimento' : 'Chave Pix para receber doações') : 'Adicionar chave Pix'}</h3>
+     <p style="margin:6px 0 0;color:var(--mut);font-size:13px">
+       ${ong
+         ? 'É a chave que os doadores veem ao doar por Pix. Confira com atenção: o dinheiro vai para ela.'
+         : 'É a chave da conta de onde você envia as doações. Ela identifica de quem veio o Pix.'}
+     </p>
      <label for="pxT">Tipo de chave</label>
      <select id="pxT" class="in">${optionsHtml}</select>
      <label for="pxK">Chave</label>
-     <input id="pxK" class="in" autocomplete="off">
+     <input id="pxK" class="in" autocomplete="off" value="${esc(atual ? atual.chave : '')}">
      <p class="dn-err" id="pxE" role="alert"></p>
      <button class="btn full" onclick="savePix(this)">Salvar chave</button>`,
-    'Adicionar Pix'
+    ong ? 'Pix da ONG' : 'Adicionar Pix'
   );
+
+  if (atual) $('#pxT').value = atual.tipo;
 }
 
 async function savePix(btn) {
   const t = $('#pxT').value;
   const k = $('#pxK').value.trim();
-  
+  const ong = ROLE == 'ong';
+
   if (!pixOk(t, k)) {
-    $('#pxE').textContent = 'Chave inválida para o tipo escolhido.';
+    $('#pxE').textContent = `Chave inválida para o tipo ${t}.`;
     return;
   }
-  
+
+  if (!ong && pixDoDoador().some((x) => x.chave.toLowerCase() == k.toLowerCase())) {
+    $('#pxE').textContent = 'Você já cadastrou esta chave.';
+    return;
+  }
+
   const salvou = await comEspera(btn, 'Salvando…', () => {
-    (USER.pix = USER.pix || []).push({ 
-      id: Date.now(), 
-      tipo: t, 
-      chave: k 
-    });
+    if (ong) {
+      meOng().pix = k;
+    } else {
+      (USER.pix = USER.pix || []).push({ id: Date.now(), tipo: t, chave: k });
+    }
   });
 
   if (!salvou) return;
-  
+
   closeModal();
-  toast('Chave Pix adicionada.');
+  toast(ong ? 'Chave Pix de recebimento salva.' : 'Chave Pix adicionada.');
+  go();
+}
+
+function delPixOng() {
+  if (!DEMO) return irEditar('epPix');
+  meOng().pix = '';
+  toast('Chave Pix removida. Os doadores não poderão doar por Pix até você cadastrar outra.');
   go();
 }
 
@@ -156,17 +247,19 @@ function delPay(k, id) {
   go();
 }
 
-const payRow = (k, id, txt) => `
+const payRow = (k, id, txt, remover = true) => `
   <div class="pm2">
     <span>${txt}</span>
-    <button class="lk" style="margin:0" aria-label="Remover" onclick="delPay('${k}', ${id})">Remover</button>
+    ${remover ? `<button class="lk" style="margin:0" aria-label="Remover" onclick="${k == 'pixOng' ? 'delPixOng()' : `delPay('${k}', ${id})`}">Remover</button>` : ''}
   </div>
 `;
 
 V.config = () => {
-  const pixList = (USER.pix || []).length ? '' : 'Nenhuma chave cadastrada';
-  const pixRows = (USER.pix || []).map((x) => payRow('pix', x.id, `${x.tipo}: ${esc(x.chave)}`)).join('');
-  
+  const pixDoador = pixDoDoador();
+  const pixList = pixDoador.length ? '' : 'Nenhuma chave cadastrada. É a chave de onde você envia as doações.';
+  /* modo real: a chave fica no perfil e só dá para trocar, não listar várias nem remover daqui */
+  const pixRows = pixDoador.map((x) => payRow('pix', x.id, `${x.tipo}: ${esc(x.chave)}`, DEMO)).join('');
+
   const cardList = (USER.cartoes || []).length ? '' : 'Os dados ficam com o gateway de pagamento, em conformidade com a LGPD.';
   const cardRows = (USER.cartoes || []).map((x) => payRow('cartoes', x.id, `${x.bandeira} final ${x.final} · ${x.validade}`)).join('');
 
@@ -175,11 +268,11 @@ V.config = () => {
       <h4>Meios de pagamento</h4>
       <div class="srow">
         <div>
-          <b>Pix</b>
+          <b>Pix (remetente)</b>
           <small>${pixList}</small>
           ${pixRows}
         </div>
-        <button class="btn light sm" ${EB()} onclick="addPix()">Adicionar</button>
+        <button class="btn light sm" onclick="addPix()">${!DEMO && pixDoador.length ? 'Alterar' : 'Adicionar'}</button>
       </div>
       <div class="srow">
         <div>
@@ -195,20 +288,35 @@ V.config = () => {
       <div class="srow">
         <div>
           <b>${USER.plano == 'GRATUITO' ? 'Gratuito' : 'Apoiador'}</b>
-          <small>O plano apoiador libera doações de valor livre.</small>
+          <small>O plano Apoiador (${money(PRECOS.APOIADOR)}/mês) libera doação de valor livre e iniciar conversas com ONGs.</small>
         </div>
         <a class="btn sm" href="#/planos">${USER.plano == 'GRATUITO' ? 'Conhecer' : 'Gerenciar'}</a>
       </div>
     </div>
   ` : '';
 
+  const pixOng = ROLE == 'ong' ? pixDaOng() : null;
+
   const ongHtml = ROLE == 'ong' ? `
+    <div class="card set">
+      <h4>Recebimento de doações</h4>
+      <div class="srow">
+        <div>
+          <b>Pix da ONG (destino)</b>
+          <small>${pixOng ? '' : 'Nenhuma chave cadastrada. Sem ela, os doadores não conseguem doar por Pix.'}</small>
+          ${pixOng ? payRow('pixOng', 0, `${pixOng.tipo}: ${esc(pixOng.chave)}`) : ''}
+        </div>
+        <button class="btn light sm" onclick="addPix()">${pixOng ? 'Alterar' : 'Adicionar'}</button>
+      </div>
+    </div>
     <div class="card set">
       <h4>Plano da ONG</h4>
       <div class="srow">
         <div>
           <b>${ONG_PLANO == 'PRO' ? 'PRO' : 'Gratuito'}</b>
-          <small>PRO libera relatórios por dia, semana e mês, envio de planilhas, gerenciamento de recursos e vagas de voluntariado.</small>
+          <small>${ONG_PLANO == 'PRO'
+            ? 'Impulsos, selo PRO, chat com doadores e relatórios avançados.'
+            : `O gratuito já cobre divulgação, gerenciamento e doações. O PRO (${money(PRECOS.PRO)}/mês) soma impulsos, chat com doadores e relatórios avançados.`}</small>
         </div>
         <a class="btn sm" href="#/planos">${ONG_PLANO == 'PRO' ? 'Gerenciar' : 'Conhecer o PRO'}</a>
       </div>
@@ -223,8 +331,8 @@ V.config = () => {
     <div class="card set">
       <h4>Legal</h4>
       <div class="srow">
-        <a href="#/termos">Termos de Uso</a>
-        <a href="#/privacidade">Política de Privacidade</a>
+        <a href="#/config/termos">Termos de Uso</a>
+        <a href="#/config/privacidade">Política de Privacidade</a>
       </div>
     </div>
   `;
@@ -292,3 +400,14 @@ V.privacidade = () =>
     ['11. Crianças e adolescentes', ['A plataforma não é destinada a menores de 18 anos sem a participação de um responsável legal.']],
     ['12. Alterações', ['Podemos atualizar esta Política. Mudanças relevantes serão comunicadas na plataforma.']],
   ]);
+
+
+/* Termos e Privacidade abertos pelas Configurações: usam a rota #/config/..., que é uma tela do app
+   (e por isso respeita o tema claro/escuro escolhido). #/termos e #/privacidade seguem existindo
+   como páginas públicas (ex.: links da tela de login). */
+const __configBase = V.config;
+V.config = (sec) => {
+  if (sec === 'termos') return V.termos();
+  if (sec === 'privacidade') return V.privacidade();
+  return __configBase();
+};

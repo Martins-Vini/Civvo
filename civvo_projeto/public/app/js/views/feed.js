@@ -172,6 +172,10 @@ const LC_SVG = {
   lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  'share-2': '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/>',
   'clipboard-list': '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',
 };
 
@@ -190,6 +194,76 @@ const lc = (nome, tam = 20) => {
   }
   return `<svg class="lc" xmlns="http://www.w3.org/2000/svg" width="${tam}" height="${tam}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${LC_SVG[nome] || ''}</svg>`;
 };
+
+/* =====================================================================
+   IMAGENS: só aparece foto que a própria pessoa enviou pelo app (Cloudinary).
+   Qualquer outro endereço (serviços de imagem aleatória, foto importada de conta externa, dados de
+   teste) é ignorado, e o padrão é a sigla da ONG / do nome com a cor azul do Civvo.
+   ===================================================================== */
+const IMG_HOSTS = ['res.cloudinary.com'];
+
+const imgOk = (u) => {
+  if (!u || typeof u !== 'string') return '';
+  if (/^(data:image\/|blob:)/i.test(u)) return u; /* prévias locais */
+  try {
+    return IMG_HOSTS.includes(new URL(u).hostname) ? u : '';
+  } catch (e) {
+    return '';
+  }
+};
+
+/* "AACD IBIRAPUERA" -> "AI" */
+const siglaDe = (nome) =>
+  String(nome || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+
+/* grupo de opções (no lugar do menu suspenso preto do navegador): guarda o valor num campo escondido */
+const opcoesSeg = (id, itens, atual, rotulo = 'Opções') =>
+  `<input type="hidden" id="${id}" value="${esc(atual)}">
+   <div class="seg" role="group" aria-label="${esc(rotulo)}">${itens
+     .map(([v, l, ic]) => `<button type="button" class="${v == atual ? 'on' : ''}" aria-pressed="${v == atual}" onclick="setOpc('${id}', '${esc(v)}', this)">${ic ? lc(ic, 15) : ''}${l}</button>`)
+     .join('')}</div>`;
+
+function setOpc(id, v, b) {
+  const campo = document.getElementById(id);
+  if (campo) campo.value = v;
+  b.parentElement.querySelectorAll('button').forEach((x) => {
+    x.classList.toggle('on', x === b);
+    x.setAttribute('aria-pressed', x === b);
+  });
+}
+
+(() => {
+  if (document.getElementById('civvo-ui-css')) return;
+  const st = document.createElement('style');
+  st.id = 'civvo-ui-css';
+  st.textContent = `
+    .seg button{display:inline-flex;align-items:center;gap:6px}
+    .seg.wrap{flex-wrap:wrap}
+
+    /* seletor de arquivos (no lugar do botão "Escolher arquivo" do navegador) */
+    .dz{display:flex;flex-direction:column;align-items:center;gap:6px;padding:22px 16px;margin-top:6px;border:2px dashed rgba(127,127,127,.5);border-radius:14px;text-align:center;cursor:pointer;color:var(--mut);transition:border-color .15s,background .15s,color .15s}
+    .dz:hover,.dz.on,.dz:focus-visible{border-color:#b7e7ff;background:rgba(183,231,255,.08);color:inherit;outline:none}
+    .dz .dz-ic{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:rgba(183,231,255,.14);color:#6fc3e8}
+    .dz b{font-size:14px;color:inherit}
+    .dz small{font-size:12px;color:var(--mut)}
+    .dz input{display:none}
+
+    .md-h{display:flex;align-items:center;gap:8px}
+    .md-l{display:flex;align-items:center;gap:6px}
+    .md-l .lc{color:var(--mut)}
+
+    /* capa/tile padrão das publicações sem imagem: sigla em azul do Civvo */
+    .pm-default{aspect-ratio:21/9;display:grid;place-items:center;background:linear-gradient(135deg,#2d4f61,#39677e)}
+    .pm-sig{font-size:clamp(40px,9vw,64px);font-weight:800;letter-spacing:3px;color:rgba(255,255,255,.92)}
+  `;
+  document.head.appendChild(st);
+})();
 
 /* =====================================================================
    MOMENTOS (stories) — moldura, visualizador, "visto" e exclusão

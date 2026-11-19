@@ -18,7 +18,7 @@ const quem = () => {
     const o = meOng();
     return { user: o.name, nome: o.name, avatar: o.logo, h: o.h };
   }
-  return { user: USER.apelido_unico, nome: nomeDoador(), avatar: USER.avatar_url, h: 200 };
+  return { user: USER.apelido_unico, nome: nomeDoador(), avatar: imgOk(USER.avatar_url), h: 200 };
 };
 
 // Dono do comentário: pode editar e excluir o próprio comentário.
@@ -32,11 +32,47 @@ const souAutorComentario = (c) => {
 
 // Dono da publicação (ONG): pode excluir qualquer comentário nela, mas nunca editar o de outra pessoa.
 const donoDoPostPodeExcluir = (pid) => {
+  if (ROLE != 'ong') return false;
   const p = POSTS.find((x) => x.id == pid);
-  return ROLE == 'ong' && !!p && p.ong == ME_ONG;
+  if (!p) return false;
+  /* ME_ONG vem do login ou do perfil; se ainda não chegou, usa o id guardado na sessão */
+  const meuId = ME_ONG || window.__civvoSessao?.usuario?.ong_profile_id || null;
+  return meuId != null && Number(p.ong) === Number(meuId);
 };
 
 let EDITING_COMMENT = null;
+
+/* reduz o tamanho da foto de quem comentou (carrega bem mais rápido) */
+const otimizaAvatar = (u, px = 96) => {
+  if (!u || typeof u !== 'string') return u || '';
+  if (/^https:\/\/lh3\.googleusercontent\.com\//.test(u) && !/=[sw]\d+/.test(u)) return u + `=s${px}-c`;
+  const m = u.match(/^(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.+)$/);
+  if (m && !/^(c_|w_|h_|f_|q_|ar_|g_)/.test(m[2])) return `${m[1]}c_fill,g_auto,w_${px},h_${px},f_auto,q_auto/${m[2]}`;
+  return u;
+};
+
+/* linha de comentário do banco -> formato usado na tela */
+const comentarioDoBack = (c, pid) => ({
+  id: c.id,
+  post: pid,
+  parent: c.parent_comment_id || null,
+  userId: c.user_id,
+  user: c.autor_nome || 'Usuário Civvo',
+  nome: c.autor_nome || 'Usuário Civvo',
+  avatar: imgOk(c.autor_avatar),
+  h: 200,
+  text: c.content,
+  editado: !!c.is_edited,
+  time: new Date(c.created_at).toLocaleDateString('pt-BR'),
+});
+
+/* troca, na memória, os comentários de uma publicação pela lista vinda do banco */
+function substituirComentarios(pid, lista) {
+  for (let i = COMMENTS.length - 1; i >= 0; i--) {
+    if (Number(COMMENTS[i].post) === Number(pid)) COMMENTS.splice(i, 1);
+  }
+  if (Array.isArray(lista)) lista.forEach((c) => COMMENTS.push(comentarioDoBack(c, pid)));
+}
 
 /* botão só com ícone (com texto alternativo para leitores de tela e dica ao passar o mouse) */
 const btnIcone = (icone, titulo, onclick, cls = '') =>
@@ -179,15 +215,18 @@ const MOTIVOS_DEN = [
 ];
 
 function openReportComment(id, pid) {
-  const opts = MOTIVOS_DEN.map((m) => `<option>${m}</option>`).join('');
+  const opts = MOTIVOS_DEN.map(
+    (m, i) => `<button type="button" class="chip ${i == 0 ? 'on' : ''}" aria-pressed="${i == 0}" onclick="setOpc('rcMot', '${m}', this)">${m}</button>`
+  ).join('');
   openModal(
-    `<h3>Denunciar comentário</h3>
-     <label for="rcMot" style="margin-top:0">Motivo</label>
-     <select id="rcMot" class="in">${opts}</select>
-     <label for="rcDet">Detalhes (opcional)</label>
+    `<h3 class="md-h">${lc('flag', 20)} Denunciar comentário</h3>
+     <label class="md-l" style="margin-top:12px">${lc('circle-alert', 16)}<span>Qual é o motivo?</span></label>
+     <input type="hidden" id="rcMot" value="${MOTIVOS_DEN[0]}">
+     <div class="chips dk" style="margin:8px 0 4px">${opts}</div>
+     <label for="rcDet" class="md-l">${lc('message-circle', 16)}<span>Detalhes (opcional)</span></label>
      <textarea id="rcDet" class="in" rows="3" maxlength="150" placeholder="Conte o que aconteceu"></textarea>
      <p class="dn-err" id="rcErr" role="alert"></p>
-     <button class="btn full" onclick="sendReportComment(${id}, this)">Enviar denúncia</button>`,
+     <button class="btn full" onclick="sendReportComment(${id}, this)">${lc('flag', 16)} Enviar denúncia</button>`,
     'Denunciar'
   );
 }
@@ -209,35 +248,13 @@ async function sendReportComment(id, btn) {
 
 async function carregarComentariosReais(pid) {
   if (DEMO) return;
+
+  /* já há comentários na memória (vieram junto com o feed)? mostra na hora e atualiza em seguida */
+  if (COMMENTS.some((c) => Number(c.post) === Number(pid))) drawComments(pid);
+
   try {
     const lista = await window.CivvoApi.listarComentariosPost(pid);
-    
-    // LIMPEZA SEGURA: Remove da memória local APENAS os comentários deste post para evitar duplicação
-    for (let i = COMMENTS.length - 1; i >= 0; i--) {
-      if (Number(COMMENTS[i].post) === Number(pid)) {
-        COMMENTS.splice(i, 1);
-      }
-    }
-
-    // Insere limpo e ordenado exatamente o que veio do MySQL
-    if (Array.isArray(lista)) {
-      lista.forEach((c) => {
-        COMMENTS.push({
-          id: c.id,
-          post: pid,
-          parent: c.parent_comment_id || null,
-          userId: c.user_id,
-          user: c.autor_nome || 'Usuário Civvo',
-          nome: c.autor_nome || 'Usuário Civvo',
-          avatar: c.autor_avatar || '',
-          h: 200,
-          text: c.content,
-          editado: !!c.is_edited,
-          time: new Date(c.created_at).toLocaleDateString('pt-BR'),
-        });
-      });
-    }
-    
+    substituirComentarios(pid, lista);
     CMT_OK.add(pid);
     drawComments(pid);
   } catch (e) {
@@ -271,23 +288,31 @@ async function addComment(pid, btn) {
   const w = quem();
   const par = RPL ? RPL.id : null;
   btn = btn || i.nextElementSibling;
+  let novo = null;
 
   const ok = await comEspera(btn, 'Enviando…', async () => {
     const r = DEMO ? null : await window.CivvoApi.comentarPost(pid, t, par);
 
-    COMMENTS.push({
-      id: r?.commentId ?? Date.now(),
+    /* o back pode devolver só o id, ou a linha inteira do comentário: aceita os dois jeitos */
+    const linha = r && (r.comment || r.comentario || r.data || r);
+    const novoId = r ? r.commentId ?? linha.id ?? r.id ?? r.insertId ?? null : null;
+    const autorId = DEMO ? null : linha?.user_id ?? window.__civvoSessao?.usuario?.id ?? null;
+
+    novo = {
+      id: novoId ?? 'tmp' + Date.now(),
       post: pid,
       parent: par,
-      userId: DEMO ? null : window.__civvoSessao?.usuario?.id,
+      userId: autorId,
       user: w.user,
       nome: w.nome,
-      avatar: w.avatar,
+      avatar: imgOk(linha?.autor_avatar) || imgOk(w.avatar),
       h: w.h,
       text: t,
       editado: false,
       time: new Date().toLocaleDateString('pt-BR'),
-    });
+      pendente: !DEMO && (novoId == null || autorId == null),
+    };
+    COMMENTS.push(novo);
 
     bump(POSTS.find((x) => x.id == pid), 1);
   });
@@ -297,6 +322,9 @@ async function addComment(pid, btn) {
   RPL = null;
   i.value = '';
   drawComments(pid);
+
+  /* sem o id verdadeiro não dá para editar/excluir: busca a lista de novo para trocar pelo comentário real */
+  if (novo && novo.pendente) carregarComentariosReais(pid);
 }
 
 const openPost = (id) => {
@@ -326,7 +354,7 @@ V.post = (id) => {
     ${postH(p)}
     <div class="card" style="padding:16px">
       <h4 style="margin-bottom:8px">Comentários</h4>
-      <div id="cmts"><p class="emp">Carregando comentários...</p></div>
+      <div id="cmts">${nest(p.id) || '<p class="emp">Carregando comentários...</p>'}</div>
       <div id="rpl" class="rpl" hidden>
         <span></span>
         <button class="lk" style="margin:0" onclick="replyTo(null)">Cancelar</button>

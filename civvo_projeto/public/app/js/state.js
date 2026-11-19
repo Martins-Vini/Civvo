@@ -9,6 +9,7 @@ let ROLE = 'doador',
 let DON = { valor: 0, met: 'PIX', cpf: '' },
   PER = 'mes',
   ONG_PLANO = 'GRATUITO',
+  ONG_IMPULSOS = { mes: '', usados: 0 },
   ME_ONG = null;
 const FOLLOW = new Set(),
   VOL = new Set();
