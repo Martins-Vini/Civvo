@@ -226,13 +226,13 @@ const MY = () => {
     return { 
       n: o ? o.name : 'Sua ONG', 
       h: o ? o.h : 200, 
-      s: o && o.logo 
+      s: o && imgOk(o.logo)
     };
   }
   return { 
     n: nomeDoador(), 
     h: 200, 
-    s: USER.avatar_url 
+    s: imgOk(USER.avatar_url)
   };
 };
 

@@ -107,7 +107,9 @@ function abrirCampanhas(ongId) {
 const pintaSeguir = (id) => {
   const f = FOLLOW.has(id);
   document.querySelectorAll(`[data-fo="${id}"]`).forEach((b) => {
-    b.textContent = f ? 'Seguindo' : 'Seguir';
+    /* o botão do card tem ícone; os demais (perfil, sugestões) só texto */
+    if (b.classList.contains('fo')) b.innerHTML = f ? `${lc('check', 13)} Seguindo` : `${lc('plus', 13)} Seguir`;
+    else b.textContent = f ? 'Seguindo' : 'Seguir';
     b.setAttribute('aria-pressed', f);
     b.classList.toggle('following', f);
   });
@@ -200,8 +202,8 @@ function dadosOng(p) {
     bio: p.historia || '',
     cat: p.causas_atendidas || '',
     city: p.cidade || e.cidade || '',
-    logo: p.logo_url || '',
-    banner: p.banner_url || '',
+    logo: imgOk(p.logo_url),
+    banner: imgOk(p.banner_url),
     bannerCor: p.banner_cor || '',
     estatuto: { missao: p.missao || '', objetivos: p.objetivos || '', gestao: p.gestao || '' },
     governanca: String(p.governanca || '').split(',').map((x) => x.trim()).filter(Boolean),
@@ -241,8 +243,8 @@ function pendenciasOng(p = typeof PERFIL_ME !== 'undefined' ? PERFIL_ME : null) 
   const temRede = Object.values(p.redes || {}).some((u) => String(u || '').trim());
 
   return [
-    ['epFoto', 'camera', 'Foto de perfil', !p.logo_url],
-    ['epCapa', 'palette', 'Capa do perfil', !p.banner_url && !p.banner_cor],
+    ['epFoto', 'camera', 'Foto de perfil', !imgOk(p.logo_url)],
+    ['epCapa', 'palette', 'Capa do perfil', !imgOk(p.banner_url) && !p.banner_cor],
     ['epBio', 'file-text', 'Nossa história', vazio(p.historia)],
     ['epCausas', 'heart', 'Causas atendidas', vazio(p.causas_atendidas)],
     ['epCnae', 'building-2', 'CNAE', vazio(p.cnae)],
@@ -367,12 +369,14 @@ const kv = (k, v) =>
   `<div class="kv"><small>${k}</small><b>${v ? esc(v) : 'Não informado'}</b></div>`;
 
 function profile(name, h, bio, meta, sections, owner, social, cover, avatar, momOng, capaCor) {
+  cover = imgOk(cover);
+  avatar = imgOk(avatar);
   const corOk = /^#[0-9a-f]{6}$/i.test(capaCor || '') ? capaCor : '';
   const coverStyle = cover
     ? `style="background:url('${esc(cover)}') center/cover;cursor:zoom-in" data-foto="${esc(cover)}" data-nome="${esc(name)}" onclick="abrirFotoEl(this)" role="button" tabindex="0" aria-label="Ampliar capa de ${esc(name)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();abrirFotoEl(this)}"`
     : corOk
     ? `style="background:${corOk}"`
-    : '';
+    : 'style="background:linear-gradient(135deg,#2d4f61,#39677e)"'; /* capa padrão: azul do Civvo */
   const verifiedBadge = (ONGS.find((x) => x.name == name) || {}).ver ? VER : '';
   
   const metaHtml = meta

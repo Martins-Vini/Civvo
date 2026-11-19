@@ -32,73 +32,88 @@ const meOng = () => {
   return o;
 };
 
+const CT_ICON = { POST: 'file-text', CAMPANHA: 'heart', VOLUNTARIO: 'users', MOMENTO: 'camera' };
+
+/* área de escolher imagens (no lugar do botão "Escolher arquivo" do navegador) */
+const dropzone = (multi) => `
+  <label class="dz" for="cMed" tabindex="0"
+    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('cMed').click()}"
+    ondragover="event.preventDefault();this.classList.add('on')" ondragleave="this.classList.remove('on')" ondrop="dzSolta(event)">
+    <span class="dz-ic">${lc('upload', 22)}</span>
+    <b>${multi ? 'Escolher imagens' : 'Escolher foto'}</b>
+    <small>${multi ? 'Arraste aqui ou clique • até 10 fotos' : 'Arraste aqui ou clique • formato vertical, como no Instagram'}</small>
+    <input id="cMed" type="file" accept="image/*" ${multi ? 'multiple' : ''} onchange="edAdd(this)">
+  </label>
+  <div id="edArea"></div>`;
+
+function dzSolta(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('on');
+  const f = [...((e.dataTransfer && e.dataTransfer.files) || [])].filter((x) => /^image\//.test(x.type));
+  if (f.length) edAddFiles(f);
+}
+
 function openCreate(t = 'POST') {
   const mom = t == 'MOMENTO';
-  ED = { 
-    list: [], 
-    cur: 0, 
-    W: mom ? 720 : 1280, 
-    H: mom ? 1280 : 800, 
-    multi: !mom, 
+  ED = {
+    list: [],
+    cur: 0,
+    W: mom ? 720 : 1280,
+    H: mom ? 1280 : 800,
+    multi: !mom,
     pend: 0,
     mom,
-    dur: 24
+    dur: 24,
   };
 
   const segHtml = Object.keys(CT)
-    .map((k) => `<button class="${k == t ? 'on' : ''}" onclick="openCreate('${k}')">${CT[k][0]}</button>`)
+    .map((k) => `<button type="button" class="${k == t ? 'on' : ''}" onclick="openCreate('${k}')">${lc(CT_ICON[k], 16)}${CT[k][0]}</button>`)
     .join('');
 
-  const campFields = t == 'CAMPANHA' ? `
-    <div class="row2">
-      <div>
-        <label for="cMeta">Meta (R$)</label>
-        <input id="cMeta" class="in" type="number" min="1">
-      </div>
-      <div>
-        <label for="cLim">Prazo</label>
-        <input id="cLim" class="in" type="date" min="${hoje()}">
-      </div>
-    </div>
-  ` : '';
+  const campFields =
+    t == 'CAMPANHA'
+      ? `<div class="row2">
+           <div>
+             <label for="cMeta" class="md-l">${lc('target', 16)}<span>Meta (R$)</span></label>
+             <input id="cMeta" class="in" type="number" min="1" placeholder="0,00">
+           </div>
+           <div>
+             <label for="cLim" class="md-l">${lc('calendar', 16)}<span>Prazo</span></label>
+             <input id="cLim" class="in" type="date" min="${hoje()}">
+           </div>
+         </div>`
+      : '';
 
   const extraFields = (t == 'VOLUNTARIO' ? volFields() : '') + campFields;
 
- const bottomContent = mom
-    ? `<label>Duração</label>
+  const bottomContent = mom
+    ? `<label class="md-l">${lc('clock', 16)}<span>Duração</span></label>
        <div class="seg" role="group" aria-label="Duração do momento" style="margin-bottom:6px">
          ${[24, 36, 48].map((h) => `<button type="button" class="${h == ED.dur ? 'on' : ''}" aria-pressed="${h == ED.dur}" onclick="setDur(${h}, this)">${h} h</button>`).join('')}
        </div>
        <small style="color:var(--mut)">O momento some sozinho depois desse tempo.</small>`
-    : `<label for="cBoost">Impulsionar</label>
-       <select id="cBoost" class="in">
-         <option value="0">Não impulsionar</option>
-         <option value="7">7 dias</option>
-         <option value="15">15 dias</option>
-         <option value="30">30 dias</option>
-       </select>`;
+    : temRecurso('impulso')
+      ? `<label class="md-l">${lc('zap', 16)}<span>Impulsionar</span></label>
+       ${opcoesSeg('cBoost', [['0', 'Não'], ['7', '7 dias'], ['15', '15 dias'], ['30', '30 dias']], '0', 'Impulsionar')}
+       <small style="color:var(--mut)">Impulsionar destaca a publicação no feed por mais tempo.${DEMO ? ` Restam ${impulsosRestantes()} de ${IMPULSOS_MES} impulsos neste mês (7 dias = 1, 15 dias = 2, 30 dias = 4).` : ''}</small>`
+      : `<div class="lock">
+           <b>${lc('zap', 16)} Impulsionar publicação</b>
+           Destaque no feed é um recurso do plano PRO (4 impulsos de 7 dias por mês).<br>
+           <a class="btn light sm" href="#/planos" onclick="closeModal()">Conhecer o PRO</a>
+         </div>`;
 
-  const submitBtn = t == 'VOLUNTARIO' && semPro() 
-    ? '' 
-    : `<button class="btn full" onclick="publish('${t}', this)">Publicar ${CT[t][0].toLowerCase()}</button>`;
+  const submitBtn =
+    `<button class="btn full" style="display:inline-flex;justify-content:center;align-items:center;gap:8px;margin-top:14px" onclick="publish('${t}', this)">${lc('send', 16)} Publicar ${CT[t][0].toLowerCase()}</button>`;
 
-  // Publicação/Campanha/Voluntariado: upload de arquivo de verdade (igual Instagram — no celular, o próprio
-  // input já abre a galeria). As fotos vão para o Cloudinary na hora de publicar, nunca por link colado.
-  // Momento: ainda por link por enquanto — a rota de criação de Momento no backend só aceita media_url
-  // (isso muda quando mexermos nos Momentos/Stories).
+  /* upload de arquivo de verdade (no celular o próprio seletor abre a galeria); as fotos vão para o Cloudinary */
   const mediaField = mom
-    ? `<label for="cMed">Foto do momento</label>
-       <input id="cMed" type="file" accept="image/*" class="in" onchange="edAdd(this)">
-       <small style="color:var(--mut)">Escolha da galeria e ajuste o enquadramento (formato vertical, como no Instagram).</small>
-       <div id="edArea"></div>`
-    : `<label for="cMed">Imagens (até 10)</label>
-       <input id="cMed" type="file" accept="image/*" multiple class="in" onchange="edAdd(this)">
-       <div id="edArea"></div>`;
+    ? `<label class="md-l">${lc('camera', 16)}<span>Foto do momento</span></label>${dropzone(false)}`
+    : `<label class="md-l">${lc('image', 16)}<span>Imagens</span></label>${dropzone(true)}`;
 
   openModal(
-    `<h3>Criar</h3>
-     <div class="seg" style="margin-bottom:8px">${segHtml}</div>
-     <label for="cTxt">${mom ? 'Legenda' : 'Texto'}</label>
+    `<h3 class="md-h">${lc('plus', 20)} Criar</h3>
+     <div class="seg wrap" style="margin-bottom:8px">${segHtml}</div>
+     <label for="cTxt" class="md-l">${lc(mom ? 'message-circle' : 'file-text', 16)}<span>${mom ? 'Legenda' : 'Texto'}</span></label>
      <textarea id="cTxt" class="in" rows="${mom ? 2 : 4}" placeholder="${CT[t][1]}"></textarea>
      ${mediaField}
      ${extraFields}
@@ -127,15 +142,21 @@ const edGeom = (it, fw, fh) => {
 };
 
 function edAdd(inp) {
+  edAddFiles(inp.files);
+  inp.value = '';
+}
+
+/* aceita os arquivos do seletor ou soltos com o mouse (arrastar e soltar) */
+function edAddFiles(files) {
   if (!ED.multi) {
     ED.list = [];
     ED.cur = 0;
   }
 
-  [...inp.files].slice(0, ED.multi ? 10 - ED.list.length : 1).forEach((f) => {
+  [...files].slice(0, ED.multi ? 10 - ED.list.length : 1).forEach((f) => {
     ED.pend++;
     const r = new FileReader();
-    
+
     r.onload = () => {
       const im = new Image();
       im.onload = () => {
@@ -149,8 +170,6 @@ function edAdd(inp) {
     };
     r.readAsDataURL(f);
   });
-  
-  inp.value = '';
 }
 
 function edRender() {
@@ -319,7 +338,7 @@ async function publishReal(t, btn) {
     campaignData = { meta_valor: m, data_limite: sqlDia(l) };
   }
 
-  const dias = t == 'MOMENTO' ? 0 : +$('#cBoost').value;
+  const dias = t == 'MOMENTO' ? 0 : +($('#cBoost')?.value || 0);
 
   const ok = await comEspera(
     btn,
@@ -417,6 +436,12 @@ async function publish(t, btn) {
     camp = { meta: m, atual: 0, limite: dataBR(l), status: 'EM_ANDAMENTO' };
   }
 
+  const dias = t == 'MOMENTO' ? 0 : +($('#cBoost')?.value || 0);
+  if (dias > 0 && impulsosDe(dias) > impulsosRestantes()) {
+    e.textContent = `Você tem ${impulsosRestantes()} ${impulsosRestantes() == 1 ? 'impulso' : 'impulsos'} neste mês e essa duração usa ${impulsosDe(dias)}. Escolha menos dias.`;
+    return;
+  }
+
   const ok = await comEspera(
     btn,
     'Publicando…',
@@ -449,10 +474,12 @@ async function publish(t, btn) {
           likes: 0,
           comments: 0,
           time: 'agora',
-          boosted: +$('#cBoost').value > 0,
+          boosted: dias > 0,
+          boostEnd: dias > 0 ? new Date(Date.now() + dias * 864e5).toLocaleDateString('pt-BR') : '',
           camp,
           vol,
         });
+        if (dias > 0) gastarImpulsos(dias);
       }
     },
     0
@@ -466,34 +493,16 @@ async function publish(t, btn) {
   go();
 }
 
-/* O login da ONG não traz o plano e o back não exige PRO para publicar vagas: a trava só vale no demo. */
-const semPro = () => DEMO && ONG_PLANO != 'PRO';
-
+/* Vagas de voluntariado fazem parte do plano gratuito (pilar de divulgação). */
 const volFields = () =>
-  semPro()
-    ? `<div class="lock">
-         <b>Vagas de voluntariado</b>
-         Publicar vagas com as necessidades da ONG é um recurso do plano PRO.<br>
-         <a class="btn light sm" href="#/planos" onclick="closeModal()">Conhecer o plano</a>
-       </div>`
-    : `<label for="cNec">O que a ONG precisa</label>
-       <textarea id="cNec" class="in" rows="3" placeholder="Habilidades, materiais, dias e horários…"></textarea>
-       <div class="row2">
-         <div>
-           <label for="cVag">Vagas</label>
-           <input id="cVag" class="in" type="number" min="1">
-         </div>
-         <div>
-           <label for="cLoc">Modalidade</label>
-           <select id="cLoc" class="in">
-             <option>Presencial</option>
-             <option>Remoto</option>
-             <option>Híbrido</option>
-           </select>
-         </div>
-       </div>
-       ${DEMO ? '' : `<label for="cLimV">Inscrições até</label>
-       <input id="cLimV" class="in" type="date" min="${hoje()}">`}`;
+  `<label for="cNec" class="md-l">${lc('users', 16)}<span>O que a ONG precisa</span></label>
+   <textarea id="cNec" class="in" rows="3" placeholder="Habilidades, materiais, dias e horários…"></textarea>
+   <label for="cVag" class="md-l">${lc('users', 16)}<span>Vagas</span></label>
+   <input id="cVag" class="in" type="number" min="1" placeholder="Quantas pessoas?">
+   <label class="md-l">${lc('map-pin', 16)}<span>Modalidade</span></label>
+   ${opcoesSeg('cLoc', [['Presencial', 'Presencial'], ['Remoto', 'Remoto'], ['Híbrido', 'Híbrido']], 'Presencial', 'Modalidade')}
+   ${DEMO ? '' : `<label for="cLimV" class="md-l">${lc('calendar', 16)}<span>Inscrições até</span></label>
+   <input id="cLimV" class="in" type="date" min="${hoje()}">`}`;
 
 /* escolhe a duração do momento (24, 36 ou 48 horas) */
 function setDur(h, b) {

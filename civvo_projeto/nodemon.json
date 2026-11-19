@@ -1,0 +1,8 @@
+{
+  "ignore": [
+    "**/node_modules/**",
+    "**/public/**",
+    "C:/Users/*"
+  ],
+  "ext": "js,json"
+}

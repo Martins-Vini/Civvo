@@ -30,9 +30,16 @@ const USER = {
   cartoes: [],
 };
 
+/* Preço mensal (R$) dos planos pagos. O valor de cada benefício e o total estão em views/plans.js (PLANOS).
+   O anual equivale a ~2 meses grátis. */
 const PRECOS = { 
-  APOIADOR: null, 
-  PRO: null 
+  APOIADOR: 9.9, 
+  PRO: 44.9 
+};
+
+const PRECOS_ANUAL = { 
+  APOIADOR: 99, 
+  PRO: 449 
 };
 
 const CAUSAS = [

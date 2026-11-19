@@ -21,7 +21,7 @@ const adaptApi = {
   ong: (r) => ({
     id: r.ong_id,
     name: r.ong_nome || 'ONG',
-    logo: r.ong_logo || r.ong_avatar || '',
+    logo: imgOk(r.ong_logo || r.ong_avatar),
     cnpj: r.ong_cnpj || '',
     cat: '',
     city: '',
@@ -57,7 +57,7 @@ const adaptApi = {
       kind,
       text: r.caption || r.content || '',
       title: '',
-      imgs: (r.media || []).filter((m) => m.media_type != 'VIDEO').map((m) => m.file_url),
+      imgs: (r.media || []).filter((m) => m.media_type != 'VIDEO').map((m) => imgOk(m.file_url)).filter(Boolean),
       likes: Math.max(+(r.total_likes ?? r.likes_count ?? r.likes) || 0, liked ? 1 : 0),
       comments: +(r.total_comments ?? r.comments_count ?? r.comments) || 0,
       liked,
@@ -93,6 +93,8 @@ function aplicarFeedReal(feed, curtidas, candidaturas, momentos = []) {
 
   const meu = ME_ONG != null ? ONGS.find((o) => o.id == ME_ONG) : null;
 
+  momentos = momentos.filter((r) => imgOk(r.media_url)); /* momento só com foto enviada pelo app */
+
   const porId = new Map();
   [...feed, ...momentos].forEach((r) => {
     if (!porId.has(String(r.ong_id))) porId.set(String(r.ong_id), adaptApi.ong(r));
@@ -104,6 +106,19 @@ function aplicarFeedReal(feed, curtidas, candidaturas, momentos = []) {
 
   POSTS.length = 0;
   POSTS.push(...feed.map((r) => adaptApi.post(r, curtidos)));
+
+  /* comentários que já vêm junto com o feed: aparecem na hora ao abrir a publicação,
+     e as fotos de quem comentou começam a baixar antes de você abrir */
+  const avatares = new Set();
+  feed.forEach((r) => {
+    if (!Array.isArray(r.comentarios)) return;
+    substituirComentarios(r.id || r.post_id, r.comentarios);
+    r.comentarios.forEach((c) => c.autor_avatar && avatares.add(otimizaAvatar(c.autor_avatar)));
+  });
+  [...avatares].slice(0, 40).forEach((u) => {
+    const im = new Image();
+    im.src = u;
+  });
 
   STORIES.length = 0;
   const grupos = new Map();
