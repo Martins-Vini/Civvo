@@ -209,6 +209,7 @@ function dadosOng(p) {
     governanca: String(p.governanca || '').split(',').map((x) => x.trim()).filter(Boolean),
     transp: p.nivel_transparencia || '',
     social: p.redes || {},
+    userId: p.user_id ?? null /* USERS.id da ONG: é o id usado no chat */,
   };
   if (p.chave_pix !== undefined) d.pix = p.chave_pix || '';
   if (p.endereco !== undefined) d.end = { cep: e.cep || '', estado: e.estado || '', rua: e.rua || '', bairro: e.bairro || '', cidade: e.cidade || '' };
@@ -593,7 +594,7 @@ V.ong = (id, sec = 'publicacoes') => {
          <a class="btn sm" href="${op ? '#/doar/' + op.id : '#'}" ${op ? '' : 'aria-disabled="true"'}>Doar</a>
          <button class="btn light sm" data-fo="${o.id}" ${EB()} aria-pressed="${f}" onclick="toggleSet(FOLLOW, ${o.id})">${f ? 'Seguindo' : 'Seguir'}</button>
          <button class="btn ghost sm" ${EB()} data-on="Candidatura enviada" data-off="Quero ser voluntário" aria-pressed="${v}" onclick="volunteer(${o.id}, null, this)">${v ? 'Candidatura enviada' : 'Quero ser voluntário'}</button>
-         <a class="btn ghost sm" href="#/chats">Mensagem</a>
+         <button class="btn ghost sm" onclick="chatAbrirComOng(${o.id})">Mensagem</button>
        </div>`;
 
   const tabs = `<nav class="tabs" aria-label="Seções do perfil">${SECS.map(([k, n]) => `<a href="#/ong/${o.id}/${k}" class="${sec == k ? 'on' : ''}">${n}</a>`).join('')}</nav>`;
