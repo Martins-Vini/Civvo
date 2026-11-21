@@ -12,6 +12,12 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_PROXY_TARGET || 'http://localhost:8080',
           changeOrigin: true,
         },
+        /* chat em tempo real (Socket.IO): precisa encaminhar também o WebSocket */
+        '/socket.io': {
+          target: env.VITE_PROXY_TARGET || 'http://localhost:8080',
+          changeOrigin: true,
+          ws: true,
+        },
       },
     },
   };

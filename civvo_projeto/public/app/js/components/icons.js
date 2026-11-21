@@ -24,6 +24,13 @@ const I = {
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   checks: '<path d="M2 12.5L6.5 17 15 8M10 15l1.5 1.5L21 7.5"/>',
   file: '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8zM14 3v5h5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  alert: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>',
+  down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  retry: '<path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7"/>',
+  pin: '<path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"/>',
+  mute: '<path d="M18 8a6 6 0 00-9.5-4.9M6.3 6.3C6.1 6.9 6 7.4 6 8c0 7-3 9-3 9h13M13.7 21a2 2 0 01-3.4 0M3 3l18 18"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
 };
 
