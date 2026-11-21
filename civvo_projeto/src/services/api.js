@@ -167,6 +167,52 @@ export const perfilOngPublico = (ongId) => doGet(`/perfil/ong/${id(ongId)}`);
 /* FormData: image + tipo ('avatar' | 'banner') */
 export const enviarImagemPerfil = (formData) => doEnvio('POST', '/perfil/imagem', formData);
 
+/* ---- Chat (ver CHAT_BACKEND.md) ---- */
+/* cria (ou devolve) a conversa com outro usuário: { conversationId }. receiverId = USERS.id do outro lado */
+export const chatGarantirConversa = (receiverId) => doEnvio('POST', '/chat/conversation', { receiverId });
+export const chatListarConversas = () => doGet('/chat/conversations');
+export const chatListarMensagens = (conversationId) => doGet(`/chat/conversations/${id(conversationId)}/messages`);
+export const chatMarcarLida = (conversationId) => doEnvio('PUT', `/chat/conversations/${id(conversationId)}/read`);
+/* FormData: file → { url, name, size } */
+/* Upload com barra de progresso (fetch não informa o progresso do envio; por isso XMLHttpRequest).
+   onProgress(0..100). Devolve { url, name, size }. */
+export function chatEnviarArquivo(formData, onProgress) {
+    return new Promise((resolve, reject) => {
+        const token = lerSessao()?.token;
+        if (token && tokenExpirado(token)) {
+            encerrarSessao();
+            return reject(new ApiError('Sua sessão expirou. Entre novamente.', 401));
+        }
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_BASE_URL}/chat/upload`);
+        xhr.timeout = 120000;
+        xhr.setRequestHeader('ngrok-skip-browser-warning', 'true');
+        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+        if (onProgress && xhr.upload) {
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+            };
+        }
+
+        xhr.onload = () => {
+            let corpo = null;
+            try {
+                corpo = JSON.parse(xhr.responseText);
+            } catch {
+                /* resposta sem JSON */
+            }
+            if (xhr.status >= 200 && xhr.status < 300 && corpo) return resolve(corpo);
+            if (xhr.status === 401) encerrarSessao();
+            reject(new ApiError(corpo?.error || corpo?.message || mensagemPadrao(xhr.status), xhr.status));
+        };
+        xhr.onerror = () => reject(new ApiError('Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.'));
+        xhr.ontimeout = () => reject(new ApiError('O envio demorou demais. Tente novamente.'));
+        xhr.send(formData);
+    });
+}
+
 /* ---- Admin ---- */
 export const listarDenuncias = () => doGet('/admin/denuncias');
 export const STATUS_DENUNCIA = ['PENDENTE', 'ANALISADO', 'IGNORADO'];

@@ -2,22 +2,15 @@
 
    A tela (views/chat.js) só conversa com `ChatBackend`; ela não sabe de onde os dados vêm.
    - Demo (?demo): ChatDemo, conversas de exemplo em memória, para ver e testar o visual.
-   - Sessão real: ChatApi, que ainda NÃO tem rotas no back (só existe a tabela MESSAGES), então tudo recusa com
-     ChatIndisponivel e a tela mostra o aviso "em breve" com o envio desabilitado.
-
-   ===== COMO LIGAR QUANDO O BACK TIVER AS ROTAS =====
-   1. Em src/services/api.js, crie uma função por rota (ex.: listarConversas, listarMensagens, enviarMensagem, marcarConversaLida).
-   2. Em ChatApi (mais abaixo), troque cada método por uma chamada a elas e passe as linhas pelo `chatMsgDoBack`.
-   3. Coloque `disponivel: true`.
-   A tela não muda. Sugestão de rotas (proposta, ainda não existem): GET /chats, GET /chats/:peerId/mensagens,
-   POST /chats/:peerId/mensagens, PUT /chats/:peerId/lida, GET /chats/contatos.
+   - Sessão real: ChatApi, que usa as rotas REST do back (src/services/api.js) para histórico/lista/arquivos
+     e o Socket.IO (window.CivvoChatSocket, src/services/chatSocket.js) para enviar e receber em tempo real.
+     O que o back precisa oferecer está em CHAT_BACKEND.md.
 
    ===== FORMATOS (o que a tela espera) =====
-   Peer     { id, nome, tipo: 'DOADOR' | 'ONG', avatar?: url }
-   Conversa { id, peer, ultima: Mensagem | null, naoLidas: número }      (id = id do outro usuário)
+   Peer     { id, nome, tipo: 'DOADOR' | 'ONG', avatar?: url }                       (id = USERS.id do outro usuário)
+   Conversa { id, peer, ultima: Mensagem | null, naoLidas: número, conversationId? }   (id = id do outro usuário)
    Mensagem { id, tipo: 'TEXT'|'AUDIO'|'IMAGE'|'VIDEO'|'FILE', texto, midia_url, audio_segundos,
-              nome?, tamanho?, lida, criada_em (ISO), minha }
-   O que é nome/tamanho de arquivo não existe na tabela MESSAGES: se o back não mandar, a tela deriva o nome do endereço. */
+              nome?, tamanho?, lida, criada_em (ISO), minha } */
 
 const CHAT_AUDIO_MAX = 60; /* segundos: o CHECK da tabela MESSAGES */
 const CHAT_ARQ_MAX = 20 * 1024 * 1024; /* ajuste conforme o limite de upload do back */
@@ -36,32 +29,296 @@ class ChatIndisponivel extends Error {
 const chatMeuTipo = () => (ROLE == 'ong' ? 'ONG' : 'DOADOR');
 const chatMeuId = () => window.__civvoSessao?.usuario?.id ?? null;
 
-/* Linha da tabela MESSAGES (como o back deve devolver) → Mensagem da tela. `meuId` = USERS.id de quem está logado. */
+const CHAT_TIPOS = ['TEXT', 'IMAGE', 'AUDIO', 'VIDEO', 'FILE'];
+
+/* Mensagem do back → Mensagem da tela. Aceita a linha do REST (snake_case) e o payload do socket (camelCase).
+   `meuId` = USERS.id de quem está logado. */
 function chatMsgDoBack(r, meuId) {
+  const tipo = String(r.media_type ?? r.mediaType ?? 'text').toUpperCase();
+  const remetente = r.sender_id ?? r.senderId;
+  const criada = r.created_at ?? r.createdAt;
+
   return {
     id: r.id,
-    tipo: r.media_type || 'TEXT',
-    texto: r.encrypted_content || '', /* se o back não decifrar, a tela mostrará o texto cifrado: decifre antes de entregar */
-    midia_url: r.media_url || '',
-    audio_segundos: r.audio_duration_seconds ?? 0,
-    nome: r.media_name || '',
-    tamanho: r.media_size ?? 0,
-    lida: !!r.is_read,
-    criada_em: r.created_at,
-    minha: meuId != null && r.sender_id == meuId,
+    tipo: CHAT_TIPOS.includes(tipo) ? tipo : 'TEXT',
+    texto: r.content ?? r.texto ?? '',
+    midia_url: r.media_url ?? r.mediaUrl ?? '',
+    audio_segundos: r.audio_duration_seconds ?? r.audioSeconds ?? 0,
+    nome: r.media_name ?? r.mediaName ?? '',
+    tamanho: r.media_size ?? r.mediaSize ?? 0,
+    lida: !!(r.is_read ?? r.isRead),
+    criada_em: criada ? new Date(criada).toISOString() : new Date().toISOString(),
+    minha: meuId != null && remetente != null && remetente == meuId,
   };
 }
 
-/* ------------------------------ Sessão real (sem rotas ainda) ------------------------------ */
+/* ------------------------------ Sessão real (REST + Socket.IO) ------------------------------ */
 
-const ChatApi = {
-  disponivel: false,
-  listarConversas: () => Promise.reject(new ChatIndisponivel()),
-  listarMensagens: () => Promise.reject(new ChatIndisponivel()),
-  enviar: () => Promise.reject(new ChatIndisponivel()),
-  marcarLida: () => Promise.reject(new ChatIndisponivel()),
-  listarContatos: () => Promise.reject(new ChatIndisponivel()),
-};
+const ChatApi = (() => {
+  const conversas = new Map(); /* id do outro usuário → conversationId */
+  const pendentes = []; /* envios aguardando a confirmação do servidor */
+  const vistas = new Set(); /* ids de mensagens já processadas (o back pode emitir 2x: sala da conversa e sala do usuário) */
+  const ouvintes = new Set();
+  let ligado = false;
+
+  const sock = () => window.CivvoChatSocket;
+  const api = () => window.CivvoApi;
+
+  const peerDoId = (conversationId) => {
+    for (const [peer, c] of conversas) if (c == conversationId) return peer;
+    return null;
+  };
+
+  const lembrar = (c) => {
+    if (c.conversationId != null) {
+      conversas.set(String(c.id), c.conversationId);
+      sock()?.entrarSala(c.conversationId);
+    }
+  };
+
+  const clientId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  /* o back pode devolver o eco da minha própria mensagem: casa com o envio que estava esperando */
+  function casarPendente(p, m) {
+    return pendentes.findIndex((x) => {
+      if (x.conversationId != p.conversationId) return false;
+      if (p.clientId) return p.clientId == x.clientId; /* o back devolveu o clientId */
+      return x.tipo == m.tipo && (x.midia ? x.midia == m.midia_url : x.texto == m.texto);
+    });
+  }
+
+  function aoReceber(p) {
+    const meuId = chatMeuId();
+    const m = chatMsgDoBack(p, meuId);
+    if (m.id == null || vistas.has(m.id)) return;
+    vistas.add(m.id);
+    if (vistas.size > 500) vistas.delete(vistas.values().next().value);
+
+    const conversationId = p.conversationId ?? p.conversation_id;
+
+    if (m.minha) {
+      const i = casarPendente({ ...p, conversationId }, m);
+      if (i >= 0) {
+        const [x] = pendentes.splice(i, 1);
+        x.resolver(m);
+        return;
+      }
+    }
+
+    const peerId = m.minha ? peerDoId(conversationId) : String(p.senderId ?? p.sender_id);
+    ouvintes.forEach((fn) => fn({ peerId, conversationId, msg: m }));
+  }
+
+  function ligar() {
+    if (ligado || !sock()) return;
+    ligado = true;
+    const s = sock();
+
+    s.on('receive_message', aoReceber);
+
+    s.on('chat_error', (e) => {
+      const x = pendentes.shift();
+      if (x) x.recusar(new Error(e?.message || 'Não foi possível enviar a mensagem.'));
+      else window.toast?.(e?.message || 'Erro no chat.');
+    });
+
+    s.on('messages_read', (p) => {
+      const conversationId = p?.conversationId ?? p?.conversation_id;
+      ouvintes.forEach((fn) => fn({ lidas: true, peerId: peerDoId(conversationId), conversationId }));
+    });
+
+    /* estado da conexão (a tela mostra "Reconectando…" e bloqueia o envio enquanto estiver fora) */
+    let jaConectou = false;
+    s.on('connect', () => {
+      ouvintes.forEach((fn) => fn({ conexao: true }));
+      /* voltou a conexão: o que chegou enquanto estava fora é buscado de novo */
+      if (jaConectou) ouvintes.forEach((fn) => fn({ reconectou: true }));
+      jaConectou = true;
+    });
+    s.on('disconnect', () => ouvintes.forEach((fn) => fn({ conexao: false })));
+    s.on('connect_error', () => ouvintes.forEach((fn) => fn({ conexao: false })));
+  }
+
+  async function garantir(peerId) {
+    const k = String(peerId);
+    if (conversas.has(k)) return conversas.get(k);
+
+    const r = await api().chatGarantirConversa(Number(peerId));
+    const c = r.conversationId ?? r.conversation_id ?? r.id;
+    if (c == null) throw new Error('Não foi possível abrir a conversa.');
+    lembrar({ id: k, conversationId: c });
+    return c;
+  }
+
+  return {
+    disponivel: true,
+
+    conectado: () => !!sock()?.conectado,
+
+    /* liga o tempo real (idempotente) */
+    iniciar() {
+      if (!sock()) return;
+      ligar();
+      sock().conectar();
+    },
+
+    parar() {
+      sock()?.desconectar();
+      ligado = false;
+      conversas.clear();
+    },
+
+    /* recebe { peerId, conversationId, msg } | { lidas, peerId } | { reconectou } | { conexao: true|false } */
+    aoReceber(fn) {
+      ouvintes.add(fn);
+      return () => ouvintes.delete(fn);
+    },
+
+    garantirConversa: (peer) => garantir(peer.id),
+
+    async listarConversas() {
+      const lista = await api().chatListarConversas();
+      const meuId = chatMeuId();
+
+      return (lista || []).map((c) => {
+        const peer = c.peer || {
+          id: c.peer_id,
+          nome: c.peer_nome,
+          tipo: c.peer_tipo,
+          avatar: c.peer_avatar,
+        };
+        const conv = {
+          id: String(peer.id),
+          conversationId: c.conversationId ?? c.conversation_id,
+          peer: {
+            id: String(peer.id),
+            nome: peer.nome || 'Usuário Civvo',
+            tipo: String(peer.tipo || peer.user_type || 'DOADOR').toUpperCase() == 'ONG' ? 'ONG' : 'DOADOR',
+            avatar: peer.avatar || '',
+          },
+          ultima: c.ultima ? chatMsgDoBack(c.ultima, meuId) : null,
+          naoLidas: Number(c.naoLidas ?? c.unread ?? 0),
+        };
+        lembrar(conv);
+        return conv;
+      });
+    },
+
+    async listarMensagens(peerId) {
+      const c = await garantir(peerId);
+      const rows = await api().chatListarMensagens(c);
+      const meuId = chatMeuId();
+      return (rows || []).map((r) => chatMsgDoBack(r, meuId));
+    },
+
+    /* payload: { tipo, texto?, arquivo?: File|Blob, nome?, tamanho?, audioSegundos?, clientId?, onProgress?(0..100) } */
+    async enviar(peerId, p) {
+      if (!sock()) throw new ChatIndisponivel();
+      this.iniciar();
+
+      const conversationId = await garantir(peerId);
+
+      let midia = '';
+      let nome = p.nome || '';
+      let tamanho = p.tamanho || 0;
+
+      if (p.arquivo) {
+        const fd = new FormData();
+        fd.append('file', p.arquivo, p.nome || 'arquivo');
+        const up = await api().chatEnviarArquivo(fd, p.onProgress);
+        midia = up.url || up.secure_url || '';
+        if (!midia) throw new Error('Não foi possível enviar o arquivo.');
+        nome = up.name || nome;
+        tamanho = up.size || tamanho;
+      }
+
+      const id = p.clientId || clientId();
+      const tipo = p.tipo || 'TEXT';
+      const dados = {
+        clientId: id,
+        conversationId,
+        senderId: chatMeuId(),
+        receiverId: Number(peerId),
+        content: p.texto || '',
+        mediaUrl: midia || null,
+        mediaType: tipo.toLowerCase(),
+        audioSeconds: p.audioSegundos || 0,
+        mediaName: nome || null,
+        mediaSize: tamanho || null,
+      };
+
+      return new Promise((ok, erro) => {
+        const item = {
+          clientId: id,
+          conversationId,
+          tipo,
+          texto: dados.content,
+          midia,
+          resolver: (m) => {
+            clearTimeout(item.t);
+            ok(m);
+          },
+          recusar: (e) => {
+            clearTimeout(item.t);
+            erro(e);
+          },
+        };
+        item.t = setTimeout(() => {
+          const i = pendentes.indexOf(item);
+          if (i >= 0) pendentes.splice(i, 1);
+          erro(new Error('O servidor não confirmou o envio. Tente novamente.'));
+        }, 12000);
+        pendentes.push(item);
+
+        /* back com confirmação (ack): { message } ou { error }. Sem ack, vale o eco "receive_message". */
+        sock().emitir('send_message', dados, (resp) => {
+          const i = pendentes.indexOf(item);
+          if (i < 0) return;
+          if (resp?.error) {
+            pendentes.splice(i, 1);
+            return item.recusar(new Error(resp.error));
+          }
+          const bruto = resp?.message || (resp?.id ? resp : null);
+          if (bruto) {
+            pendentes.splice(i, 1);
+            vistas.add(bruto.id);
+            item.resolver(chatMsgDoBack(bruto, chatMeuId()));
+          }
+        });
+      });
+    },
+
+    async marcarLida(peerId) {
+      const c = conversas.get(String(peerId));
+      if (c == null) return;
+      await api().chatMarcarLida(c);
+    },
+
+    /* Quem posso procurar para começar uma conversa: doador → ONGs que segue; ONG → seguidores e quem segue. */
+    async listarContatos() {
+      const minhaListaSeguindo = await api().minhaListaSeguindo();
+      let lista = minhaListaSeguindo || [];
+
+      if (ROLE == 'ong' && ME_ONG != null) {
+        const seguidores = await api().listaOng(ME_ONG, 'seguidores');
+        lista = [...(seguidores || []), ...lista];
+      }
+
+      const meuId = chatMeuId();
+      const vistos = new Set();
+
+      return lista
+        .filter((u) => u.user_id != null && u.user_id != meuId && !vistos.has(u.user_id) && vistos.add(u.user_id))
+        .map((u) => ({
+          id: String(u.user_id),
+          nome: u.nome || 'Usuário Civvo',
+          tipo: String(u.user_type).toUpperCase() == 'ONG' ? 'ONG' : 'DOADOR',
+          avatar: u.avatar || '',
+        }))
+        .filter((p) => chatPodeConversar(chatMeuTipo(), p.tipo));
+    },
+  };
+})();
 
 /* ------------------------------ Demo: conversas de exemplo em memória ------------------------------ */
 
@@ -128,6 +385,11 @@ const ChatDemo = (() => {
 
   return {
     disponivel: true,
+    conectado: () => true,
+    iniciar() {},
+    parar() {},
+    aoReceber: () => () => {},
+    garantirConversa: () => Promise.resolve(),
 
     listarConversas() {
       const lista = Object.entries(dados().conversas)

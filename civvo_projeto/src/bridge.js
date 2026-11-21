@@ -4,6 +4,7 @@ import './main.js';
 import { lerSessao, salvarSessao, limparSessao, rotaInicial, tokenExpirado } from './services/sessao.js';
 import { mostrarModalCarregando } from './pages/modal-carregando.js';
 import * as api from './services/api.js';
+import { chatSocket } from './services/chatSocket.js';
 
 const BASE = import.meta.env?.BASE_URL ?? '/';
 
@@ -24,6 +25,8 @@ export const sessao = {
 window.CivvoSessao = sessao;
 /* O app logado (public/app, scripts sem módulos) chama o back por aqui: window.CivvoApi.listarFeed(), etc. */
 window.CivvoApi = api;
+/* Chat em tempo real (Socket.IO) para o app logado: window.CivvoChatSocket.conectar(), .emitir(), .on()… */
+window.CivvoChatSocket = chatSocket;
 
 const modoDemo = () => new URLSearchParams(location.search).has('demo') || import.meta.env?.VITE_DEMO === 'true';
 
@@ -100,6 +103,7 @@ function roteia() {
   const hash = location.hash;
 
   if (hash === '#/sair') {
+    chatSocket.desconectar();
     sessao.sair();
     history.replaceState(null, '', `${location.pathname}#/inicio`);
     location.reload();
