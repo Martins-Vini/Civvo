@@ -5,7 +5,7 @@ const NAV = {
   doador: [
     ['feed', 'home', 'Feed'],
     ['buscar', 'search', 'Buscar'],
-    ['chats', 'chat', 'Chats'],
+    ['chats', 'chat', 'Chats', () => !DEMO && typeof chatNaoLidas == 'function' && chatNaoLidas() > 0],
     ['avisos', 'bell', 'Avisos'],
     ['perfil', 'user', 'Perfil'],
     ['config', 'gear', 'Config'],
@@ -13,7 +13,7 @@ const NAV = {
   ong: [
     ['feed', 'home', 'Feed'],
     ['buscar', 'search', 'Buscar'],
-    ['chats', 'chat', 'Chats'],
+    ['chats', 'chat', 'Chats', () => !DEMO && typeof chatNaoLidas == 'function' && chatNaoLidas() > 0],
     ['avisos', 'bell', 'Avisos'],
     ['painel', 'dash', 'Painel'],
     ['perfil', 'user', 'Perfil', () => !DEMO && typeof pendenciasOng == 'function' && pendenciasOng().length > 0],
@@ -113,7 +113,7 @@ function shell(inner, on, { rightCol = 1, wide = 0 } = {}) {
     : '';
 
   const chatBtn = ROLE != 'admin' 
-    ? `<a class="tb-m ${on == 'chats' ? 'on' : ''}" href="#/chats" aria-label="Mensagens">${ic('chat')}</a>` 
+    ? `<a class="tb-m ${on == 'chats' ? 'on' : ''}" href="#/chats" aria-label="Mensagens">${ic('chat')}${!DEMO && typeof chatNaoLidas == 'function' && chatNaoLidas() > 0 ? '<i class="dot" aria-hidden="true"></i>' : ''}</a>` 
     : '';
 
   const rightColHtml = rightCol 
