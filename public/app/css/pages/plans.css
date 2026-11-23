@@ -1,0 +1,25 @@
+
+.plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.plan { padding: 20px; }
+.plan.on { border: 2px solid var(--pri); }
+.plan .pr { display: block; font-size: 20px; margin-top: 4px; }
+.plan ul { margin: 12px 0 16px 18px; padding: 0; }
+.plan li { margin: 6px 0; }
+
+/* Cartões de plano: preço, grupos por pilar e benefícios com valor */
+.plan .pr small { font-size: 13px; font-weight: 500; color: var(--mut); }
+.plan .pr2 { display: block; color: var(--mut); margin-top: 2px; }
+.plan .pd { display: block; margin: 10px 0 4px; color: var(--mut); }
+.plan .pg { margin: 16px 0 0; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--mut); }
+.plan .pg + ul { margin-top: 6px; }
+.plan .pi { margin: 14px 0 0; font-weight: 600; }
+.plan ul.bn { list-style: none; margin: 8px 0 12px; padding: 0; }
+.plan ul.bn li { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin: 0; padding: 10px 0; border-top: 1px solid rgba(127, 127, 127, .22); }
+.plan ul.bn li:first-child { border-top: 0; }
+.plan .bt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.plan .bt i { font-style: normal; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--mut); }
+.plan .bt small { color: var(--mut); line-height: 1.4; }
+.plan .bv { flex: none; font-size: 13px; font-weight: 600; white-space: nowrap; color: var(--mut); }
+.plan .pt2 { margin: 4px 0 16px; padding: 10px 12px; border-radius: 10px; background: rgba(127, 127, 127, .12); font-size: 13px; line-height: 1.5; }
+.plan .pt2 s { color: var(--mut); }
+.plan .eco { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 999px; background: rgba(34, 197, 94, .16); color: #16a34a; font-weight: 600; font-size: 12px; }

@@ -1,0 +1,168 @@
+
+
+import './main.js';
+import { lerSessao, salvarSessao, limparSessao, rotaInicial, tokenExpirado } from './services/sessao.js';
+import { mostrarModalCarregando } from './pages/modal-carregando.js';
+import * as api from './services/api.js';
+import { chatSocket } from './services/chatSocket.js';
+
+const BASE = import.meta.env?.BASE_URL ?? '/';
+
+const PUBLICAS = ['#/inicio', '#/login-user', '#/login-ong', '#/login-admin', '#/cadastro-user', '#/cadastro-ong', '#/redefinir-senha', '#/redefinir-senha-ong'];
+
+const areaPublica = document.getElementById('app');
+const areaLogada = document.getElementById('area-logada');
+const linksDoApp = [];
+let appCarregando = null;
+let appCarregado = false;
+
+/* A sessão em si é criada pelas páginas de login (services/sessao.js). Aqui só lemos e encerramos. */
+export const sessao = {
+  ler: lerSessao,
+  entrar: salvarSessao,
+  sair: limparSessao,
+};
+window.CivvoSessao = sessao;
+/* O app logado (public/app, scripts sem módulos) chama o back por aqui: window.CivvoApi.listarFeed(), etc. */
+window.CivvoApi = api;
+/* Chat em tempo real (Socket.IO) para o app logado: window.CivvoChatSocket.conectar(), .emitir(), .on()… */
+window.CivvoChatSocket = chatSocket;
+
+const modoDemo = () => new URLSearchParams(location.search).has('demo') || import.meta.env?.VITE_DEMO === 'true';
+
+function mostrar(logada) {
+  window.__civvoPublico = !logada;
+  areaPublica.hidden = logada;
+  areaLogada.hidden = !logada;
+  linksDoApp.forEach((l) => {
+    l.disabled = !logada;
+  });
+
+  document.documentElement.classList.toggle('area-logada', logada);
+  document.body.classList.toggle('area-logada', logada);
+
+  if (!logada) {
+    document.title = 'Civvo';
+  }
+}
+
+function carregarScript(src) {
+  return new Promise((ok, erro) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.async = false;
+    s.onload = ok;
+    s.onerror = () => erro(new Error(`Falha ao carregar ${src}`));
+    document.body.append(s);
+  });
+}
+
+function carregarApp() {
+  appCarregando ??= (async () => {
+    /* só aparece se o carregamento demorar (o modal espera 500 ms antes de surgir) */
+    const carregando = mostrarModalCarregando({
+      titulo: 'Preparando a Civvo',
+      mensagens: ['Carregando o seu espaço…', 'Organizando o seu feed…', 'Quase lá…'],
+      atraso: 500,
+    });
+
+    try {
+      const html = await (await fetch(`${BASE}app/index.html`)).text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const local = (c) => c && !/^(https?:)?\/\//.test(c) && !c.startsWith('/');
+      const estilos = [...doc.querySelectorAll('link[rel="stylesheet"]')].map((l) => l.getAttribute('href')).filter(local);
+      const scripts = [...doc.querySelectorAll('script[src]')].map((s) => s.getAttribute('src')).filter(local);
+
+      estilos.forEach((href) => {
+        const l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = `${BASE}app/${href}`;
+        document.head.append(l);
+        linksDoApp.push(l);
+      });
+
+      window.__civvoSessao = sessao.ler();
+
+      for (const src of scripts) {
+        await carregarScript(`${BASE}app/${src}`);
+      }
+
+      appCarregado = true;
+    } finally {
+      carregando.fechar();
+    }
+  })().catch((e) => {
+    areaLogada.innerHTML = '<p style="padding:24px">Não foi possível carregar o app. Atualize a página.</p>';
+    console.error(e);
+  });
+
+  return appCarregando;
+}
+
+function roteia() {
+  const hash = location.hash;
+
+  if (hash === '#/sair') {
+    chatSocket.desconectar();
+    sessao.sair();
+    history.replaceState(null, '', `${location.pathname}#/inicio`);
+    location.reload();
+    return;
+  }
+
+  if (PUBLICAS.includes(hash)) {
+    mostrar(false);
+    return;
+  }
+
+  let s = sessao.ler();
+
+  /* token vencido (o back emite 7 dias para doador/ONG e 8 h para admin): encerra e recarrega no início */
+  if (s && tokenExpirado(s.token)) {
+    location.hash = '#/sair';
+    return;
+  }
+
+  if (!s && modoDemo()) {
+    s = { perfil: 'doador', usuario: {}, demo: true };
+    sessao.entrar(s);
+  }
+
+  if (!s) {
+    mostrar(false);
+    location.hash = '#/inicio';
+    return;
+  }
+
+  if (hash === '' || hash === '#/') {
+    location.hash = rotaInicial(s);
+    return;
+  }
+
+  const veioDoPublico = window.__civvoPublico !== false;
+  mostrar(true);
+
+  if (appCarregado && veioDoPublico) {
+    aplicarSessao(s);
+  }
+
+  carregarApp();
+}
+
+// Lucide (lucide-static): carrega só os ícones que o app usa
+const lucide = import.meta.glob(
+  '/node_modules/lucide-static/icons/{x,plus,pause,play,ellipsis,more-horizontal,trash-2,send,chevron-left,chevron-right,reply,pencil,flag,heart,camera,message-circle}.svg',
+  { query: '?raw', import: 'default', eager: true }
+);
+
+window.LUCIDE_SVG = (nome) => {
+  const nomes = [nome, nome === 'ellipsis' ? 'more-horizontal' : null].filter(Boolean);
+  for (const n of nomes) {
+    const chave = Object.keys(lucide).find((k) => k.endsWith('/' + n + '.svg'));
+    if (chave) return lucide[chave];
+  }
+  return '';
+};
+
+addEventListener('hashchange', roteia);
+roteia();

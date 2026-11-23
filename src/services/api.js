@@ -1,0 +1,240 @@
+import { lerSessao, limparSessao, tokenExpirado } from './sessao.js';
+
+const API_BASE_URL = (import.meta.env?.VITE_API_URL || '/api').replace(/\/+$/, '');
+const TEMPO_LIMITE_MS = 20000;
+
+export class ApiError extends Error {
+    constructor(mensagem, status = 0) {
+        super(mensagem);
+        this.name = 'ApiError';
+        this.status = status;
+    }
+}
+
+function mensagemPadrao(status) {
+    if (status === 401) return 'Credenciais inválidas ou sessão expirada.';
+    if (status === 403) return 'Você não tem permissão para realizar esta ação.';
+    if (status === 404) return 'Recurso não encontrado.';
+    if (status >= 500) return 'Erro no servidor. Tente novamente em instantes.';
+    return 'Erro ao comunicar com a API.';
+}
+
+function encerrarSessao() {
+    limparSessao();
+    window.location.hash = '#/sair';
+}
+
+export async function apiRequest(endpoint, { method = 'GET', dados = null, autenticado = false } = {}) {
+    // FormData (upload de imagem de verdade) precisa ir sem Content-Type: o navegador define sozinho
+    // o "multipart/form-data; boundary=..." correto, que é o que o multer espera no back-end.
+    // Se a gente fixar 'application/json' aqui, o back não consegue separar os arquivos e o upload quebra.
+    const ehFormData = typeof FormData !== 'undefined' && dados instanceof FormData;
+
+    const headers = {
+        'ngrok-skip-browser-warning': 'true',
+    };
+    if (!ehFormData) {
+        headers['Content-Type'] = 'application/json';
+    }
+
+    if (autenticado) {
+        const token = lerSessao()?.token;
+        if (token && tokenExpirado(token)) {
+            encerrarSessao();
+            throw new ApiError('Sua sessão expirou. Entre novamente.', 401);
+        }
+        if (token) headers.Authorization = `Bearer ${token}`;
+    }
+
+    const controle = new AbortController();
+    const relogio = setTimeout(() => controle.abort(), TEMPO_LIMITE_MS);
+
+    let resposta;
+    try {
+        resposta = await fetch(`${API_BASE_URL}${endpoint}`, {
+            method,
+            headers,
+            body: ehFormData ? dados : (dados ? JSON.stringify(dados) : undefined),
+            signal: controle.signal,
+        });
+    } catch (erro) {
+        if (erro?.name === 'AbortError') {
+            throw new ApiError('O servidor demorou para responder. Tente novamente.');
+        }
+        throw new ApiError('Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.');
+    } finally {
+        clearTimeout(relogio);
+    }
+
+    const corpo = await resposta.json().catch(() => null);
+
+    if (!resposta.ok) {
+        if (resposta.status === 401 && autenticado) encerrarSessao();
+        throw new ApiError(corpo?.error || corpo?.message || mensagemPadrao(resposta.status), resposta.status);
+    }
+
+    return corpo ?? {};
+}
+
+const doGet = (endpoint) => apiRequest(endpoint, { autenticado: true });
+const doEnvio = (method, endpoint, dados) => apiRequest(endpoint, { method, dados, autenticado: true });
+const id = (valor) => encodeURIComponent(valor);
+
+/* ======================= Autenticação (rotas públicas) ======================= */
+export const solicitarCadastroUser = (payload) => apiRequest('/auth/register/solicitar', { method: 'POST', dados: payload });
+export const confirmarCadastroUser = (payload) => apiRequest('/auth/register/confirmar', { method: 'POST', dados: payload });
+export const iniciarLoginUser = (payload) => apiRequest('/auth/login/iniciar', { method: 'POST', dados: payload });
+export const verificarLoginUser = (payload) => apiRequest('/auth/login/verificar', { method: 'POST', dados: payload });
+export const loginGoogle = (idToken, userType = 'DOADOR') =>
+    apiRequest('/auth/google', { method: 'POST', dados: { idToken, userType } });
+export const solicitarRecuperacaoSenha = (email) =>
+    apiRequest('/auth/password/solicitar', { method: 'POST', dados: { email } });
+export const confirmarRecuperacaoSenha = ({ email, codigo, novaSenha }) =>
+    apiRequest('/auth/password/confirmar', { method: 'POST', dados: { email, codigo, novaSenha } });
+export const loginOng = (payload) => apiRequest('/ong/login/ong', { method: 'POST', dados: payload });
+export const cadastrarOng = (payload) => apiRequest('/ong/register/ong', { method: 'POST', dados: payload });
+export const loginAdmin = (payload) => apiRequest('/admin/login', { method: 'POST', dados: payload });
+
+/* ======================= Rotas autenticadas (app logado) ======================= */
+export const listarFeed = () => doGet('/posts/feed');
+export const criarPost = (payload) => doEnvio('POST', '/posts', payload);
+export const editarPost = (postId, caption) => doEnvio('PUT', `/posts/${id(postId)}`, { caption });
+export const excluirPost = (postId) => doEnvio('DELETE', `/posts/${id(postId)}`);
+
+export const curtirPost = (postId) => doEnvio('POST', `/posts/${id(postId)}/curtir`);
+export const listarComentariosPost = (postId) => doGet(`/posts/${id(postId)}/comentarios`);
+export const comentarPost = (postId, content, parentCommentId = null) =>
+    doEnvio('POST', `/posts/${id(postId)}/comentar`, { content, parentCommentId });
+export const editarComentario = (postId, commentId, content) =>
+    doEnvio('PUT', `/posts/${id(postId)}/comentarios/${id(commentId)}`, { content });
+export const excluirComentario = (postId, commentId) =>
+    doEnvio('DELETE', `/posts/${id(postId)}/comentarios/${id(commentId)}`);
+export const denunciarComentario = (commentId, reason) =>
+    doEnvio('POST', `/comentarios/${id(commentId)}/denunciar`, { reason: String(reason ?? '').slice(0, 225) });
+export const compartilharPost = (postId) => doEnvio('POST', `/posts/${id(postId)}/compartilhar`);
+export const denunciarPost = (postId, reason) =>
+    doEnvio('POST', `/posts/${id(postId)}/denunciar`, { reason: String(reason ?? '').slice(0, 225) });
+export const candidatarVoluntariado = (postId) => doEnvio('POST', `/posts/${id(postId)}/candidatar`);
+
+export const historicoCurtidas = () => doGet('/posts/historico/curtidas');
+export const historicoComentarios = () => doGet('/posts/historico/comentarios');
+export const historicoVoluntariado = (userId) =>
+    doGet(userId ? `/posts/historico/voluntariado/${id(userId)}` : '/posts/historico/voluntariado');
+
+/* ---- Seguidores ---- */
+export const toggleSeguir = (payload) => doEnvio('POST', '/followers/toggle', payload);
+export const listarSeguidores = (userId) => doGet(`/followers/${id(userId)}/followers`);
+export const listarSeguindo = (userId) => doGet(`/followers/${id(userId)}/following`);
+/* seguir/deixar de seguir uma ONG (id do perfil da ONG, o mesmo de POSTS.ong_id) */
+export const toggleSeguirOng = (ongId) => doEnvio('POST', '/followers/toggle', { ongId });
+/* ids das ONGs que eu sigo */
+export const minhasOngsSeguidas = () => doGet('/followers/me/ongs');
+export const contagensOng = (ongId) => doGet(`/followers/ong/${id(ongId)}/contagens`);
+/* tipo: 'seguidores' | 'seguindo' */
+export const listaOng = (ongId, tipo) => doGet(`/followers/ong/${id(ongId)}/${id(tipo)}`);
+export const minhaListaSeguindo = () => doGet('/followers/me/seguindo');
+
+/* ---- Notificações ---- */
+export const listarNotificacoes = () => doGet('/notificacoes');
+export const marcarNotificacoesLidas = () => doEnvio('PUT', '/notificacoes/lidas');
+
+/* ---- Momentos (stories) ---- */
+export const listarMomentos = () => doGet('/moments');
+export const criarMomento = (payload) => doEnvio('POST', '/moments', payload);
+/* upload de arquivo de verdade (FormData: image, caption, duracao_horas) */
+export const criarMomentoUpload = (formData) => doEnvio('POST', '/moments/upload', formData);
+export const momentosVistos = () => doGet('/moments/vistos');
+export const marcarMomentoVisto = (momentId) => doEnvio('POST', `/moments/${id(momentId)}/visto`);
+export const excluirMomento = (momentId) => doEnvio('DELETE', `/moments/${id(momentId)}`);
+
+/* ---- Doações ---- */
+export const doar = (payload) => doEnvio('POST', '/donations', payload);
+
+/* ---- Perfil do doador ---- */
+export const atualizarPerfilDoador = (payload) => doEnvio('PUT', '/donor/profile', payload);
+
+/* ---- Exclusão da própria conta ---- */
+export const excluirContaDoador = () => doEnvio('DELETE', '/donor/account');
+export const excluirContaOng = () => doEnvio('DELETE', '/ong/account');
+
+/* ---- ONG ---- */
+export const perfilOng = () => doGet('/ong/perfil');
+
+/* ---- Perfil completo e editável (ONG e doador) ---- */
+export const meuPerfil = () => doGet('/perfil/me');
+export const atualizarMeuPerfil = (payload) => doEnvio('PUT', '/perfil/me', payload);
+export const perfilOngPublico = (ongId) => doGet(`/perfil/ong/${id(ongId)}`);
+/* perfil público do doador (USERS.id) */
+export const perfilDoadorPublico = (userId) => doGet(`/perfil/doador/${id(userId)}`);
+/* FormData: image + tipo ('avatar' | 'banner') */
+export const enviarImagemPerfil = (formData) => doEnvio('POST', '/perfil/imagem', formData);
+
+/* ---- Chat (ver CHAT_BACKEND.md) ---- */
+/* cria (ou devolve) a conversa com outro usuário: { conversationId }. receiverId = USERS.id do outro lado */
+export const chatGarantirConversa = (receiverId) => doEnvio('POST', '/chat/conversation', { receiverId });
+export const chatListarConversas = () => doGet('/chat/conversations');
+export const chatListarMensagens = (conversationId) => doGet(`/chat/conversations/${id(conversationId)}/messages`);
+export const chatMarcarLida = (conversationId) => doEnvio('PUT', `/chat/conversations/${id(conversationId)}/read`);
+/* aceita um pedido de conversa (quem recebeu o pedido) */
+export const chatAceitarConversa = (conversationId) => doEnvio('PUT', `/chat/conversations/${id(conversationId)}/aceitar`);
+/* FormData: file → { url, name, size } */
+/* Upload com barra de progresso (fetch não informa o progresso do envio; por isso XMLHttpRequest).
+   onProgress(0..100). Devolve { url, name, size }. */
+export function chatEnviarArquivo(formData, onProgress) {
+    return new Promise((resolve, reject) => {
+        const token = lerSessao()?.token;
+        if (token && tokenExpirado(token)) {
+            encerrarSessao();
+            return reject(new ApiError('Sua sessão expirou. Entre novamente.', 401));
+        }
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_BASE_URL}/chat/upload`);
+        xhr.timeout = 120000;
+        xhr.setRequestHeader('ngrok-skip-browser-warning', 'true');
+        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+        if (onProgress && xhr.upload) {
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+            };
+        }
+
+        xhr.onload = () => {
+            let corpo = null;
+            try {
+                corpo = JSON.parse(xhr.responseText);
+            } catch {
+                /* resposta sem JSON */
+            }
+            if (xhr.status >= 200 && xhr.status < 300 && corpo) return resolve(corpo);
+            if (xhr.status === 401) encerrarSessao();
+            reject(new ApiError(corpo?.error || corpo?.message || mensagemPadrao(xhr.status), xhr.status));
+        };
+        xhr.onerror = () => reject(new ApiError('Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.'));
+        xhr.ontimeout = () => reject(new ApiError('O envio demorou demais. Tente novamente.'));
+        xhr.send(formData);
+    });
+}
+
+/* ---- Busca (ONGs e Doadores) ---- */
+/* tipo: 'ONG' | 'DOADOR' | null (ambos) */
+export const buscar = (q, tipo = null) => doGet(`/buscar?q=${id(q)}${tipo ? `&tipo=${id(tipo)}` : ''}`);
+
+/* ---- Parceria entre ONGs (substitui "voluntariado" quando quem ajuda é outra ONG) ---- */
+export const solicitarParceria = (toOngId, postId, message) =>
+    doEnvio('POST', '/parcerias', { toOngId, postId, message });
+export const listarParceriasRecebidas = () => doGet('/parcerias/recebidas');
+export const listarParceriasEnviadas = () => doGet('/parcerias/enviadas');
+export const responderParceria = (requestId, aceitar) =>
+    doEnvio('PUT', `/parcerias/${id(requestId)}/responder`, { aceitar });
+
+/* ---- Admin ---- */
+export const listarDenuncias = () => doGet('/admin/denuncias');
+export const STATUS_DENUNCIA = ['PENDENTE', 'ANALISADO', 'IGNORADO'];
+export const atualizarDenuncia = (denunciaId, status) => {
+    if (!STATUS_DENUNCIA.includes(status)) {
+        return Promise.reject(new ApiError(`Status de denúncia inválido: ${status}.`, 400));
+    }
+    return doEnvio('PUT', `/admin/denuncias/${id(denunciaId)}`, { status });
+};

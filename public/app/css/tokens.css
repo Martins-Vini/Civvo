@@ -1,0 +1,22 @@
+/* Altere cores só aqui. */
+
+:root {
+  --bg: color-mix(in srgb,#b7e7ff 18%,#fff);
+  --card: #fff;
+  --ink: #39677e;
+  --mut: color-mix(in srgb,#6995a4 25%,#39677e);
+  --line: color-mix(in srgb,#b7e7ff 55%,#fff);
+  --pri: #39677e;
+  --acc: var(--pri); 
+  --pri2: color-mix(in srgb,#39677e 82%,#000);
+  --sky: #b7e7ff;
+  --soft: color-mix(in srgb,#b7e7ff 28%,#fff);
+  --ok: #1f7a50;
+  --bad: #b8402c;
+  --ink-g: #1f3945;
+  --ink-fim: #132630; 
+  --sh: 0 8px 30px rgba(57,103,126,.12);
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top,0px);
+  padding-bottom: env(safe-area-inset-bottom,0px);
+}

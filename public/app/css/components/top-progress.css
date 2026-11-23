@@ -1,0 +1,30 @@
+/* Barra fina no topo durante a troca de sessão (ver js/components/top-progress.js). */
+
+.nprog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 100; /* acima de modais (60) e avisos (70) */
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .25s ease;
+}
+
+.nprog.on { opacity: 1; }
+
+.nprog b {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--pri);
+  border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 8px var(--pri);
+  transition-property: width;
+  transition-timing-function: cubic-bezier(.2, .8, .3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nprog, .nprog b { transition-duration: .01ms !important; }
+}

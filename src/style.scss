@@ -1,0 +1,77 @@
+@use './styles/reset';
+@use './styles/variables';
+@use './styles/home';
+@use './styles/landing'; 
+@use './styles/auth';
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+
+:root {
+  font-family: 'Poppins';
+  line-height: 1.5;
+  color: #1f2430;
+  background: #eef4ff;
+}
+
+body {
+  min-height: 100vh;
+  padding: 24px;
+  color: var(--corTexto, #1f2430);
+  background: linear-gradient(135deg, #a8d5e5 0%, #6994a3 100%);
+}
+
+p {
+  font-size: 20px;
+}
+
+
+/* foto da ONG clicável no card */
+.post .ph .ph-av { display: inline-flex; flex: none; border-radius: 50%; }
+
+/* botão Seguir ao lado do nome, no card */
+.post .ph .fo { display: inline; margin: 0 0 0 8px; padding: 0; font-weight: 700; }
+.post .ph .fo[aria-pressed="true"] { color: var(--mut); font-weight: 500; }
+
+/* botão grande "Criar conteúdo" na lateral */
+.side .side-create {
+  background: #b7e7ff; /* mesmo azul-claro dos botões primários; troque pela sua variável, se tiver */
+  color: #0b1a22;
+  font-weight: 700;
+  border-radius: 14px;
+  margin: 14px 0 0;
+  min-height: 48px;
+  justify-content: center;
+}
+.side .side-create:hover { filter: brightness(1.06); }
+
+.side {
+  transition: width .3s cubic-bezier(.4, 0, .2, 1), box-shadow .3s ease;
+  will-change: width;
+}
+.side .nav span {
+  transition: opacity .2s ease .08s, transform .3s cubic-bezier(.4, 0, .2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .side, .side .nav span { transition: none; }
+}
+
+.post .ph .ph-av { display: inline-flex; flex: none; border-radius: 50%; }
+
+/* botão Seguir ao lado do nome, no card */
+.post .ph .fo { display: inline; margin: 0 0 0 8px; padding: 0; font-weight: 700; }
+.post .ph .fo[aria-pressed="true"] { color: var(--mut); font-weight: 500; }
+
+/* botão grande "Criar conteúdo" na lateral */
+.side .side-create {
+  background: #b7e7ff; /* mesmo azul-claro dos botões primários; troque pela sua variável, se tiver */
+  color: #0b1a22;
+  font-weight: 700;
+  border-radius: 14px;
+  margin: 14px 0 0;
+  min-height: 48px;
+  justify-content: center;
+}
+.side .side-create:hover { filter: brightness(1.06); }
+
+/* contadores clicáveis do perfil (seguidores / seguindo / campanhas) */
+.pf .meta [role="button"]:hover b { text-decoration: underline; }
+.pf .meta [role="button"]:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: 6px; }
