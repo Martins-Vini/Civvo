@@ -299,7 +299,7 @@ const cta = (p, o) => {
   if (ROLE == 'ong' && p.ong == ME_ONG) return boostBtn(p);
   if (p.vol) return volBtn(p, o);
   if (c) {
-    return c.status == 'ENCERRADA'
+    return campanhaFechada(c)
       ? `<span class="tag">${lc('circle-check', 14)} Campanha encerrada</span>`
       : `<a class="btn sm" href="#/doar/${p.id}">${lc('heart', 16)} Ajudar</a>`;
   }

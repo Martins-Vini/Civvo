@@ -148,7 +148,12 @@ export const marcarMomentoVisto = (momentId) => doEnvio('POST', `/moments/${id(m
 export const excluirMomento = (momentId) => doEnvio('DELETE', `/moments/${id(momentId)}`);
 
 /* ---- Doações ---- */
+/* cria a doação (PENDENTE) e a cobrança no gateway: { donation, pix?, checkout_url? } */
 export const doar = (payload) => doEnvio('POST', '/donations', payload);
+/* status e dados de uma doação do próprio usuário (inclui o Pix enquanto estiver pendente) */
+export const buscarDoacao = (donationId) => doGet(`/donations/${id(donationId)}`);
+/* histórico de doações do usuário logado */
+export const minhasDoacoes = () => doGet('/donations/minhas');
 
 /* ---- Perfil do doador ---- */
 export const atualizarPerfilDoador = (payload) => doEnvio('PUT', '/donor/profile', payload);

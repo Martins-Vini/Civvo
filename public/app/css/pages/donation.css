@@ -23,3 +23,14 @@
 @media (max-width: 700px) {
   .amts { grid-template-columns: repeat(2, 1fr); }
 }
+
+.dn-aviso { color: var(--mut); font-size: 12px; margin-top: 12px; line-height: 1.45; }
+textarea.in { resize: vertical; min-height: 60px; font-family: inherit; }
+
+/* Pix: QR Code e copia e cola no comprovante */
+.pix-box { margin: 14px 0 4px; }
+.pix-qr { display: block; margin: 14px auto; background: #fff; padding: 8px; border-radius: 10px; border: 1px solid var(--line); max-width: 100%; height: auto; }
+.pix-box .pxd { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid rgba(127, 127, 127, .3); border-radius: 10px; }
+.pix-cod { word-break: break-all; font-size: 12px; min-width: 0; }
+.pix-passos { color: var(--mut); font-size: 13px; line-height: 1.5; padding-left: 18px; margin: 12px 0 0; }
+.rc .acts { display: flex; flex-wrap: wrap; gap: 8px; }

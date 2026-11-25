@@ -424,6 +424,8 @@ V.perfil = () => {
 
   /* garante os dados salvos no banco (caso a carga junto com o feed tenha falhado) */
   if (!DEMO && !PERFIL_ME && !PERFIL_CARR && !PERFIL_ERRO) carregarMeuPerfil();
+  /* histórico de doações vindo do back */
+  if (!DEMO && !MINHAS_OK && !MINHAS_ERRO) carregarMinhasDoacoes();
 
   const ap = DONATIONS.filter((d) => d.status == 'APROVADO').length;
 
@@ -441,14 +443,23 @@ V.perfil = () => {
     `)
     .join('') || '<p class="emp">Você ainda não apoia nenhuma ONG.</p>';
 
-  const doacoesContent = DONATIONS.map((d) => `
+  const doacoesLista = DONATIONS.map((d) => `
     <a class="lnk" href="#/recibo/${d.id}" style="color:inherit">
       <span>${esc(d.ong)} · ${money(d.valor)}</span>
-      <span class="tag ${d.status == 'PENDENTE' ? 'warn' : d.status == 'REJEITADO' ? 'bad' : ''}">${d.status}</span>
+      ${statusDoacaoHtml(d.status)}
     </a>
   `).join('') || '<p class="emp">Você ainda não fez nenhuma doação.</p>';
 
-  /* modo real: o back não guarda causas de interesse nem lista doações do usuário */
+  /* modo real: o histórico vem do back (estados: carregando, erro, lista) */
+  const doacoesContent = DEMO
+    ? doacoesLista
+    : MINHAS_ERRO
+      ? '<p class="emp">Não foi possível carregar o histórico. <a href="javascript:void(0)" onclick="tentarHistoricoDeNovo()">Tentar de novo</a></p>'
+      : !MINHAS_OK
+        ? '<p class="emp" role="status">Carregando…</p>'
+        : doacoesLista;
+
+  /* modo real: o back não guarda causas de interesse; o histórico de doações vem de /donations/minhas */
   const sections = DEMO
     ? [
         ['Causas de interesse', causasContent, 0],
@@ -457,7 +468,7 @@ V.perfil = () => {
       ]
     : [
         ['Causas de interesse', causasContent, 0],
-        ['Histórico de doações', '<p class="emp">O histórico de doações estará disponível em breve.</p>', 0],
+        ['Histórico de doações', doacoesContent, 0],
       ];
 
   sections.push(['', blocoExcluirConta(), 0]);
@@ -646,7 +657,7 @@ V.ong = (id, sec = 'publicacoes') => {
 
   const ps = POSTS.filter((p) => p.ong == o.id);
   const cps = ps.filter((p) => p.camp);
-  const op = cps.find((p) => p.camp.status != 'ENCERRADA');
+  const op = cps.find((p) => !campanhaFechada(p.camp));
   const f = FOLLOW.has(o.id);
   const v = isVol(o.id);
   const me = o.id == ME_ONG;
