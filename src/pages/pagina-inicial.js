@@ -1,16 +1,13 @@
-/* Página inicial (pública): hero com os botões de entrada + seções institucionais.
-   Os textos das seções são lorem ipsum de propósito: é só trocar nas constantes e nos arrays abaixo.
+/* Página inicial (pública): hero com os botões de entrada + seções Sobre, Impactos e Contribuidores.
+   Os textos vêm do TCC (ABNT) e das funções que o app oferece; edite nas constantes e arrays abaixo.
+   Os números da seção Impactos são de pesquisas externas (IBGE e IDIS), citadas no fim da própria seção.
    Os links entre seções rolam via JS (data-ir), porque o roteador do site usa o hash (#/rota). */
 
 import paginaInicialSvg from '../assets/pagina-inicial.svg';
 import logoCivvoSvg from '../assets/logo-civvo.svg';
 
-const REPO_URL = 'https://github.com/Martins-Vini/Civvo';
-
-const L1 = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
-const L2 = 'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit.';
-const L3 = 'Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.';
-const LC = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do eiusmod.';
+const REPO_FRONT_URL = 'https://github.com/Martins-Vini/Civvo';
+const REPO_BACK_URL = 'https://github.com/Martins-Vini/Civvo_API.git';
 
 /* ---------- ícones (traço, herdam a cor do texto) ---------- */
 const svg = (corpo, t = 22) =>
@@ -21,9 +18,9 @@ const ICONE = {
   rede: svg('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>'),
   escudo: svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
   estrela: svg('<polygon points="12 2 15.1 8.6 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.6 12 2"/>'),
-  usuario: svg('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>', 26),
-  usuarioG: svg('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>', 44),
   seta: svg('<path d="M5 12h14M13 6l6 6-6 6"/>', 18),
+  predio: svg('<path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M15 9h2a2 2 0 0 1 2 2v10M9 7h2M9 11h2M9 15h2"/>', 30),
+  moeda: svg('<circle cx="12" cy="12" r="9"/><path d="M15 8.5c-.6-.9-1.7-1.5-3-1.5-1.7 0-3 1-3 2.3 0 3.2 6 1.7 6 5 0 1.4-1.3 2.4-3 2.4-1.4 0-2.6-.6-3.1-1.6M12 5.5V7M12 17v1.5"/>', 30),
   github: svg('<path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>', 20),
 };
 
@@ -31,33 +28,48 @@ const ICONE = {
 const NAV = [
   ['sobre', 'Sobre'],
   ['impactos', 'Impactos'],
-  ['etec', 'Etec CT'],
-  ['equipe', 'Equipe'],
   ['contribuidores', 'Contribuidores'],
 ];
 
+const SOBRE_SUB =
+  'Uma plataforma web que aproxima ONGs, doadores e voluntários, com foco inicial na região de Cidade Tiradentes, em São Paulo.';
+
+const SOBRE = [
+  'As Organizações Não Governamentais (ONGs) e as Organizações da Sociedade Civil (OSCs) têm um papel fundamental em áreas sociais, ambientais e humanitárias. Mesmo assim, enfrentam falta de visibilidade, escassez de recursos financeiros e mantimentos e ausência de ferramentas digitais eficientes para organizar suas atividades e seus dados.',
+  'Em Cidade Tiradentes, distrito marcado pela vulnerabilidade social, organizações locais e pequenos projetos estão na linha de frente da assistência. O Civvo nasceu para apoiar esse trabalho: uma solução desenvolvida pela Omoyari com a proposta de reunir, em um só ambiente, a divulgação das causas e a gestão da organização.',
+  'Nosso objetivo é integrar tecnologia e responsabilidade social, ampliando a visibilidade das instituições, facilitando a captação de doações e voluntários e contribuindo para uma gestão mais organizada e transparente.',
+];
+
 const PILARES = [
-  [ICONE.coracao, 'Lorem ipsum dolor', LC],
-  [ICONE.rede, 'Consectetur adipiscing', LC],
-  [ICONE.escudo, 'Sed do eiusmod', LC],
+  [ICONE.rede, 'Visibilidade', 'Perfil da ONG, publicações e campanhas para apresentar causas, projetos e necessidades.'],
+  [ICONE.coracao, 'Doações e voluntariado', 'Doações para campanhas, candidatura a vagas de voluntariado e contato mais próximo com as organizações.'],
+  [ICONE.escudo, 'Gestão e transparência', 'Proposta de reunir finanças, demandas, estoque e relatórios de prestação de contas. O painel de gestão está em desenvolvimento.'],
 ];
 
-/* valor, sufixo, progresso do anel (0 a 1): números de exemplo, troque pelos reais */
+/* destaques: com "anel" (0 a 1) o cartão desenha o percentual; sem ele, mostra o ícone */
 const IMPACTOS = [
-  [1200, '+', 0.82, 'Lorem ipsum dolor sit'],
-  [350, '+', 0.64, 'Consectetur adipiscing'],
-  [98, '%', 0.98, 'Sed do eiusmod tempor'],
-  [24, '', 0.4, 'Ut labore et dolore'],
+  { valor: 596.3, casas: 1, sufixo: ' mil', icone: ICONE.predio, rotulo: 'fundações privadas e associações sem fins lucrativos no Brasil em 2023', fonte: 'IBGE' },
+  { valor: 24.3, casas: 1, prefixo: 'R$ ', sufixo: ' bi', icone: ICONE.moeda, rotulo: 'doados por pessoas físicas a organizações e campanhas em 2024', fonte: 'IDIS' },
+  { valor: 78, sufixo: '%', anel: 0.78, rotulo: 'dos entrevistados fizeram algum tipo de doação em 2024: dinheiro, bens ou tempo', fonte: 'IDIS' },
+  { valor: 30, sufixo: '%', anel: 0.3, rotulo: 'dos entrevistados acham a maioria das ONGs confiável: transparência faz diferença', fonte: 'IDIS' },
 ];
 
-const EQUIPE = [
-  ['Nome Sobrenome', 'Função do integrante'],
-  ['Nome Sobrenome', 'Função do integrante'],
-  ['Nome Sobrenome', 'Função do integrante'],
-  ['Nome Sobrenome', 'Função do integrante'],
+/* o que o TCC espera gerar (capítulo "Impactos esperados da solução") */
+const ESPERADOS = [
+  ['Para as ONGs', 'Mais visibilidade para projetos e campanhas, buscando organizar doações, voluntários e recursos em um único ambiente.'],
+  ['Para a sociedade', 'Mais facilidade para conhecer organizações, acompanhar projetos e escolher como colaborar.'],
+  ['Para o futuro', 'Conectar cada vez mais organizações, alcançar novas regiões e evoluir conforme as necessidades de quem usa.'],
 ];
 
-const CONTRIBUIDORES = 9;
+const FONTES = [
+  ['IDIS: Pesquisa Doação Brasil 2024', 'https://www.idis.org.br/wp-content/uploads/2025/08/Pesquisa-Doacao-Brasil-2024_IDIS.pdf'],
+  ['IBGE: Fundações Privadas e Associações sem Fins Lucrativos 2023', 'https://agenciadenoticias.ibge.gov.br/media/com_mediaibge/arquivos/4f37c99ded2314b765a7395372bcdd26.pdf'],
+];
+
+const PROFESSORES = [
+  ['Aline Mendonça Cordeiro', 'Professora orientadora', 'AC'],
+  ['Allan Vidal de Negreiros', 'Professor orientador', 'AN'],
+];
 
 /* ---------- peças de HTML ---------- */
 /* onda animada no fim da seção: a cor é a da seção seguinte (--next) */
@@ -80,14 +92,26 @@ const ring = (p) => `
     <circle class="bg" cx="40" cy="40" r="34"/><circle class="fg" cx="40" cy="40" r="34"/>
   </svg>`;
 
-const chipContrib = (i) => `
-  <div class="lp-chipc"><i class="lp-chipc__av">${ICONE.usuario}</i><b>Nome do contribuidor</b></div>`;
+const numero = (v, casas = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 
-const trilho = (inv) => {
-  const grupo = (oculto) =>
-    `<div class="lp-marquee__grupo"${oculto ? ' aria-hidden="true"' : ''}>${Array.from({ length: CONTRIBUIDORES }, chipContrib).join('')}</div>`;
-  return `<div class="lp-marquee${inv ? ' lp-marquee--inv' : ''}"><div class="lp-marquee__trilho">${grupo(false)}${grupo(true)}</div></div>`;
-};
+const cartaoImpacto = ({ valor, casas = 0, prefixo = '', sufixo = '', anel, icone, rotulo, fonte }, i) => `
+  <article class="lp-stat lp-reveal" data-dir="zoom" style="--d:${i}">
+    <div class="lp-stat__in" data-tilt>
+      ${anel ? ring(anel) : `<i class="lp-stat__ico">${icone}</i>`}
+      <strong class="lp-stat__num"><small>${prefixo}</small><b data-contar="${valor}" data-casas="${casas}">0</b><small>${sufixo}</small></strong>
+      <p>${rotulo}</p>
+      <b class="lp-stat__fonte">Fonte: ${fonte}</b>
+    </div>
+  </article>`;
+
+const professor = ([nome, funcao, iniciais], i) => `
+  <article class="lp-prof lp-reveal" style="--d:${i}">
+    <div class="lp-prof__in" data-tilt>
+      <i class="lp-avatar" aria-hidden="true">${iniciais}</i>
+      <h3>${nome}</h3>
+      <b class="lp-funcao">${funcao}</b>
+    </div>
+  </article>`;
 
 function montarHtml() {
   const ano = new Date().getFullYear();
@@ -156,12 +180,10 @@ function montarHtml() {
     <!-- ============ SOBRE O PROJETO ============ -->
     <section class="lp-sec lp-sec--claro" id="lp-sobre" data-sec="sobre" aria-labelledby="t-sobre">
       <div class="lp-wrap">
-        ${cabecalho('01', '<span id="t-sobre">Sobre o Projeto</span>', L1)}
+        ${cabecalho('01', '<span id="t-sobre">Sobre o Projeto</span>', SOBRE_SUB)}
         <div class="lp-sobre">
           <div class="lp-reveal" data-dir="left">
-            <p class="lp-corpo lp-corpo--capitular">${L2}</p>
-            <p class="lp-corpo">${L3}</p>
-            <p class="lp-corpo">${L1}</p>
+            ${SOBRE.map((t, i) => `<p class="lp-corpo${i ? '' : ' lp-corpo--capitular'}">${t}</p>`).join('')}
           </div>
           <div class="lp-pilares">
             ${PILARES.map(
@@ -183,89 +205,42 @@ function montarHtml() {
     <!-- ============ IMPACTOS ============ -->
     <section class="lp-sec lp-sec--escuro" id="lp-impactos" data-sec="impactos" aria-labelledby="t-impactos">
       <div class="lp-wrap">
-        ${cabecalho('02', '<span id="t-impactos">Impactos da Nossa Rede Social</span>', L1)}
+        ${cabecalho('02', '<span id="t-impactos">Impacto Social</span>', 'O tamanho do terceiro setor e da cultura de doação no Brasil: o cenário em que o Civvo quer fazer a diferença.')}
         <div class="lp-stats">
-          ${IMPACTOS.map(
-            ([valor, sufixo, p, rotulo], i) => `
-            <article class="lp-stat lp-reveal" data-dir="zoom" style="--d:${i}">
-              <div class="lp-stat__in" data-tilt>
-                ${ring(p)}
-                <strong class="lp-stat__num"><b data-contar="${valor}">0</b><em>${sufixo}</em></strong>
-                <p>${rotulo}</p>
-              </div>
-            </article>`
-          ).join('')}
+          ${IMPACTOS.map(cartaoImpacto).join('')}
         </div>
-        <p class="lp-nota lp-reveal">${L3}</p>
-      </div>
-      ${onda('var(--bg)')}
-    </section>
-
-    <!-- ============ ETEC CT ============ -->
-    <section class="lp-sec lp-sec--claro" id="lp-etec" data-sec="etec" aria-labelledby="t-etec">
-      <div class="lp-wrap lp-etec">
-        <div>
-          ${cabecalho('03', '<span id="t-etec">Sobre a Etec CT</span>', L1)}
-          <p class="lp-selo lp-reveal">${ICONE.estrela}<b>Informática para Internet</b></p>
-          <div class="lp-reveal" style="--d:1">
-            <p class="lp-corpo">${L2}</p>
-            <p class="lp-corpo">${L3}</p>
-          </div>
+        <h3 class="lp-esperados__t lp-reveal">O que esperamos gerar</h3>
+        <div class="lp-esperados">
+          ${ESPERADOS.map(([titulo, texto], i) => `<article class="lp-esperado lp-reveal" style="--d:${i}"><h4>${titulo}</h4><p>${texto}</p></article>`).join('')}
         </div>
 
-        <div class="lp-janela lp-reveal" data-dir="right" aria-hidden="true">
-          <div class="lp-janela__barra"><i></i><i></i><i></i><b>etec-ct.html</b></div>
-          <pre class="lp-codigo"><code>
-<span class="l" style="--i:0"><em class="c">&lt;!-- lorem ipsum dolor sit amet --&gt;</em></span>
-<span class="l" style="--i:1"><em class="t">&lt;section</em> <em class="a">class</em>=<em class="s">"etec"</em><em class="t">&gt;</em></span>
-<span class="l" style="--i:2">  <em class="t">&lt;h1&gt;</em>Etec CT<em class="t">&lt;/h1&gt;</em></span>
-<span class="l" style="--i:3">  <em class="t">&lt;p&gt;</em>Informática para Internet<em class="t">&lt;/p&gt;</em></span>
-<span class="l" style="--i:4">  <em class="t">&lt;a</em> <em class="a">href</em>=<em class="s">"#/civvo"</em><em class="t">&gt;</em>Civvo<em class="t">&lt;/a&gt;</em></span>
-<span class="l" style="--i:5"><em class="t">&lt;/section&gt;</em><b class="cursor"></b></span></code></pre>
-        </div>
+        <p class="lp-nota lp-reveal">Os números são de pesquisas sobre o Brasil e não representam resultados da plataforma. O IDIS ouviu pessoas com 18 anos ou mais e renda familiar acima de 1 salário mínimo. Consulte: ${FONTES.map(
+          ([nome, url]) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${nome}</a>`
+        ).join(' · ')}.</p>
       </div>
       ${onda('var(--soft)')}
     </section>
 
-    <!-- ============ EQUIPE ============ -->
-    <section class="lp-sec lp-sec--tint" id="lp-equipe" data-sec="equipe" aria-labelledby="t-equipe">
-      <div class="lp-wrap">
-        ${cabecalho('04', '<span id="t-equipe">Sobre Nossa Equipe</span>', L1)}
-        <div class="lp-equipe">
-          ${EQUIPE.map(
-            ([nome, funcao], i) => `
-            <article class="lp-membro lp-reveal" style="--d:${i}">
-              <div class="lp-membro__in" data-tilt>
-                <i class="lp-avatar">${ICONE.usuarioG}</i>
-                <h3>${nome}</h3>
-                <b class="lp-funcao">${funcao}</b>
-                <p>${LC}</p>
-              </div>
-            </article>`
-          ).join('')}
-        </div>
-      </div>
-      ${onda('var(--ink-g)')}
-    </section>
-
     <!-- ============ CONTRIBUIDORES ============ -->
-    <section class="lp-sec lp-sec--escuro" id="lp-contribuidores" data-sec="contribuidores" aria-labelledby="t-contrib">
+    <section class="lp-sec lp-sec--tint" id="lp-contribuidores" data-sec="contribuidores" aria-labelledby="t-contrib">
       <div class="lp-wrap">
-        ${cabecalho('05', '<span id="t-contrib">Contribuidores</span>', L1)}
-      </div>
-      <div class="lp-reveal" data-dir="zoom">
-        ${trilho(false)}
-        ${trilho(true)}
-      </div>
-      <div class="lp-wrap">
+        ${cabecalho('03', '<span id="t-contrib">Contribuidores</span>', 'Os professores que orientam o desenvolvimento do Civvo na Etec de Cidade Tiradentes.')}
+        <div class="lp-profs">
+          ${PROFESSORES.map(professor).join('')}
+        </div>
         <div class="lp-cta lp-reveal">
           <div>
             <h3>Quer fazer parte?</h3>
-            <p>${LC}</p>
+            <p>Conheça o código do Civvo no GitHub: o front-end, que dá vida às telas, e o back-end, que cuida da API e dos dados.</p>
           </div>
-          <a class="lp-btn lp-btn--primario" href="${REPO_URL}" target="_blank" rel="noopener noreferrer" data-magnetico>
-            ${ICONE.github}<b>Ver no GitHub</b>
-          </a>
+          <div class="lp-cta__acoes">
+            <a class="lp-btn lp-btn--primario" href="${REPO_FRONT_URL}" target="_blank" rel="noopener noreferrer" data-magnetico>
+              ${ICONE.github}<b>Front-end</b>
+            </a>
+            <a class="lp-btn lp-btn--vidro" href="${REPO_BACK_URL}" target="_blank" rel="noopener noreferrer" data-magnetico>
+              ${ICONE.github}<b>Back-end</b>
+            </a>
+          </div>
         </div>
       </div>
       ${onda('var(--ink-fim)')}
@@ -273,7 +248,7 @@ function montarHtml() {
 
     <footer class="lp-rodape">
       <img src="${logoCivvoSvg}" alt="" width="44" height="48" />
-      <p>© ${ano} Civvo · Etec CT · Informática para Internet</p>
+      <p>© ${ano} Civvo · Omoyari · Etec de Cidade Tiradentes · Informática para Internet</p>
       <button type="button" class="lp-topo" data-ir="topo">Voltar ao topo</button>
     </footer>
   </div>`;
@@ -326,7 +301,8 @@ function iniciarEfeitos(root) {
   /* contador dos números de impacto */
   const contar = (el) => {
     const alvo = Number(el.dataset.contar);
-    const fmt = (v) => v.toLocaleString('pt-BR');
+    const casas = Number(el.dataset.casas || 0);
+    const fmt = (v) => numero(v, casas);
     if (reduz) {
       el.textContent = fmt(alvo);
       return;
@@ -334,7 +310,7 @@ function iniciarEfeitos(root) {
     const t0 = performance.now();
     const passo = (t) => {
       const k = Math.min(1, (t - t0) / 1700);
-      el.textContent = fmt(Math.round(alvo * (k === 1 ? 1 : 1 - Math.pow(2, -10 * k))));
+      el.textContent = fmt(alvo * (k === 1 ? 1 : 1 - Math.pow(2, -10 * k)));
       if (k < 1) rafs.add(requestAnimationFrame(passo));
     };
     rafs.add(requestAnimationFrame(passo));
