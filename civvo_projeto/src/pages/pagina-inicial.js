@@ -18,6 +18,7 @@ const ICONE = {
   rede: svg('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>'),
   escudo: svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
   estrela: svg('<polygon points="12 2 15.1 8.6 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.6 12 2"/>'),
+  usuario: svg('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>', 26),
   seta: svg('<path d="M5 12h14M13 6l6 6-6 6"/>', 18),
   predio: svg('<path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M15 9h2a2 2 0 0 1 2 2v10M9 7h2M9 11h2M9 15h2"/>', 30),
   moeda: svg('<circle cx="12" cy="12" r="9"/><path d="M15 8.5c-.6-.9-1.7-1.5-3-1.5-1.7 0-3 1-3 2.3 0 3.2 6 1.7 6 5 0 1.4-1.3 2.4-3 2.4-1.4 0-2.6-.6-3.1-1.6M12 5.5V7M12 17v1.5"/>', 30),
@@ -66,10 +67,10 @@ const FONTES = [
   ['IBGE: Fundações Privadas e Associações sem Fins Lucrativos 2023', 'https://agenciadenoticias.ibge.gov.br/media/com_mediaibge/arquivos/4f37c99ded2314b765a7395372bcdd26.pdf'],
 ];
 
-const PROFESSORES = [
-  ['Aline Mendonça Cordeiro', 'Professora orientadora', 'AC'],
-  ['Allan Vidal de Negreiros', 'Professor orientador', 'AN'],
-];
+/* nomes que passam nas duas fileiras da seção Contribuidores */
+const PROFESSORES = ['Aline Mendonça Cordeiro', 'Allan Vidal de Negreiros'];
+/* quantos cartões cada grupo repete, para a fileira cobrir telas largas */
+const REPETICOES = 10;
 
 /* ---------- peças de HTML ---------- */
 /* onda animada no fim da seção: a cor é a da seção seguinte (--next) */
@@ -104,14 +105,16 @@ const cartaoImpacto = ({ valor, casas = 0, prefixo = '', sufixo = '', anel, icon
     </div>
   </article>`;
 
-const professor = ([nome, funcao, iniciais], i) => `
-  <article class="lp-prof lp-reveal" style="--d:${i}">
-    <div class="lp-prof__in" data-tilt>
-      <i class="lp-avatar" aria-hidden="true">${iniciais}</i>
-      <h3>${nome}</h3>
-      <b class="lp-funcao">${funcao}</b>
-    </div>
-  </article>`;
+/* inicio troca o primeiro nome da fileira; lerNomes deixa cada nome ser lido uma só vez por leitores de tela */
+const trilho = (inv) => {
+  const inicio = inv ? 1 : 0;
+  const grupo = (lerNomes) =>
+    `<div class="lp-marquee__grupo">${Array.from({ length: REPETICOES }, (_, i) => {
+      const oculto = !(lerNomes && i < PROFESSORES.length);
+      return `<div class="lp-chipc"${oculto ? ' aria-hidden="true"' : ''}><i class="lp-chipc__av">${ICONE.usuario}</i><b>${PROFESSORES[(i + inicio) % PROFESSORES.length]}</b></div>`;
+    }).join('')}</div>`;
+  return `<div class="lp-marquee${inv ? ' lp-marquee--inv' : ''}"><div class="lp-marquee__trilho">${grupo(!inv)}${grupo(false)}</div></div>`;
+};
 
 function montarHtml() {
   const ano = new Date().getFullYear();
@@ -218,16 +221,19 @@ function montarHtml() {
           ([nome, url]) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${nome}</a>`
         ).join(' · ')}.</p>
       </div>
-      ${onda('var(--soft)')}
+      ${onda('var(--ink-g)')}
     </section>
 
     <!-- ============ CONTRIBUIDORES ============ -->
-    <section class="lp-sec lp-sec--tint" id="lp-contribuidores" data-sec="contribuidores" aria-labelledby="t-contrib">
+    <section class="lp-sec lp-sec--escuro" id="lp-contribuidores" data-sec="contribuidores" aria-labelledby="t-contrib">
       <div class="lp-wrap">
         ${cabecalho('03', '<span id="t-contrib">Contribuidores</span>', 'Os professores que orientam o desenvolvimento do Civvo na Etec de Cidade Tiradentes.')}
-        <div class="lp-profs">
-          ${PROFESSORES.map(professor).join('')}
-        </div>
+      </div>
+      <div class="lp-reveal" data-dir="zoom">
+        ${trilho(false)}
+        ${trilho(true)}
+      </div>
+      <div class="lp-wrap">
         <div class="lp-cta lp-reveal">
           <div>
             <h3>Quer fazer parte?</h3>

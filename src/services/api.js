@@ -148,12 +148,10 @@ export const marcarMomentoVisto = (momentId) => doEnvio('POST', `/moments/${id(m
 export const excluirMomento = (momentId) => doEnvio('DELETE', `/moments/${id(momentId)}`);
 
 /* ---- Doações ---- */
-/* cria a doação (PENDENTE) e a cobrança no gateway: { donation, pix?, checkout_url? } */
 export const doar = (payload) => doEnvio('POST', '/donations', payload);
-/* status e dados de uma doação do próprio usuário (inclui o Pix enquanto estiver pendente) */
 export const buscarDoacao = (donationId) => doGet(`/donations/${id(donationId)}`);
-/* histórico de doações do usuário logado */
-export const minhasDoacoes = () => doGet('/donations/minhas');
+/* só funciona com PAYMENT_PROVIDER=mock e fora de produção (o back recusa com 404 nos outros casos) */
+export const simularPagamentoDoacao = (donationId) => doEnvio('POST', `/donations/${id(donationId)}/simular-pagamento`);
 
 /* ---- Perfil do doador ---- */
 export const atualizarPerfilDoador = (payload) => doEnvio('PUT', '/donor/profile', payload);
@@ -169,8 +167,6 @@ export const perfilOng = () => doGet('/ong/perfil');
 export const meuPerfil = () => doGet('/perfil/me');
 export const atualizarMeuPerfil = (payload) => doEnvio('PUT', '/perfil/me', payload);
 export const perfilOngPublico = (ongId) => doGet(`/perfil/ong/${id(ongId)}`);
-/* perfil público do doador (USERS.id) */
-export const perfilDoadorPublico = (userId) => doGet(`/perfil/doador/${id(userId)}`);
 /* FormData: image + tipo ('avatar' | 'banner') */
 export const enviarImagemPerfil = (formData) => doEnvio('POST', '/perfil/imagem', formData);
 
@@ -180,8 +176,6 @@ export const chatGarantirConversa = (receiverId) => doEnvio('POST', '/chat/conve
 export const chatListarConversas = () => doGet('/chat/conversations');
 export const chatListarMensagens = (conversationId) => doGet(`/chat/conversations/${id(conversationId)}/messages`);
 export const chatMarcarLida = (conversationId) => doEnvio('PUT', `/chat/conversations/${id(conversationId)}/read`);
-/* aceita um pedido de conversa (quem recebeu o pedido) */
-export const chatAceitarConversa = (conversationId) => doEnvio('PUT', `/chat/conversations/${id(conversationId)}/aceitar`);
 /* FormData: file → { url, name, size } */
 /* Upload com barra de progresso (fetch não informa o progresso do envio; por isso XMLHttpRequest).
    onProgress(0..100). Devolve { url, name, size }. */
@@ -221,18 +215,6 @@ export function chatEnviarArquivo(formData, onProgress) {
         xhr.send(formData);
     });
 }
-
-/* ---- Busca (ONGs e Doadores) ---- */
-/* tipo: 'ONG' | 'DOADOR' | null (ambos) */
-export const buscar = (q, tipo = null) => doGet(`/buscar?q=${id(q)}${tipo ? `&tipo=${id(tipo)}` : ''}`);
-
-/* ---- Parceria entre ONGs (substitui "voluntariado" quando quem ajuda é outra ONG) ---- */
-export const solicitarParceria = (toOngId, postId, message) =>
-    doEnvio('POST', '/parcerias', { toOngId, postId, message });
-export const listarParceriasRecebidas = () => doGet('/parcerias/recebidas');
-export const listarParceriasEnviadas = () => doGet('/parcerias/enviadas');
-export const responderParceria = (requestId, aceitar) =>
-    doEnvio('PUT', `/parcerias/${id(requestId)}/responder`, { aceitar });
 
 /* ---- Admin ---- */
 export const listarDenuncias = () => doGet('/admin/denuncias');

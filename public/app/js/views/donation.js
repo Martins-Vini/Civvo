@@ -1,294 +1,41 @@
-/* Doação e comprovante — pagamento REAL via gateway.
-
-   Fluxo (modo real):
-     1. POST /api/donations  { campaign_id | ong_id, amount, mensagem, cpf, metodo, idempotency_key }
-        O back cria a doação como PENDENTE e uma cobrança no gateway. Responde:
-          { donation: { id, status, valor, metodo, expires_at, ... },
-            pix?: { copia_e_cola, qr_code_base64, expires_at },   (metodo PIX)
-            checkout_url?: "https://..." }                         (metodo CARTAO)
-     2. PIX    -> vai para #/recibo/:id, mostra QR Code + "copia e cola" e consulta o status sozinho.
-        CARTAO -> redireciona para a página segura do gateway (checkout_url); o gateway devolve o doador
-                  para #/recibo/:id, que consulta o status.
-     3. GET /api/donations/:id devolve o status. Quem muda para APROVADO é o webhook do gateway no back,
-        nunca o front. Os dados do cartão não passam pelo Civvo.
-     4. GET /api/donations/minhas alimenta o histórico no perfil.
-   Contrato completo (campos e status): ver o resumo entregue junto com este código.
-
-   Modo demo: tudo local e simulado (DONATIONS em memória). */
-
 const PRESETS = [20, 50, 100, 200];
-const VALOR_MIN = 1;
-const VALOR_MAX = 50000;
-const MSG_MAX = 500;
 
 const pctOf = (c) => (c.meta ? Math.min(100, (c.atual / c.meta) * 100) : 0);
 
-/* ======================= regras de interface ======================= */
-
-/* só conta de doador doa (o back confere de novo) */
-function bloqueioDoador() {
-  return ROLE == 'doador' ? '' : 'Somente contas de doador podem fazer doações.';
-}
-
-/* fim do dia do prazo, em ms (aceita dd/mm/aaaa, aaaa-mm-dd e datas ISO); 0 = sem prazo conhecido */
-function fimDoPrazo(v) {
-  const s = String(v || '').trim();
-  let m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (m) return new Date(+m[3], +m[2] - 1, +m[1], 23, 59, 59).getTime();
-  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m) return new Date(+m[1], +m[2] - 1, +m[3], 23, 59, 59).getTime();
-  return new Date(s).getTime() || 0;
-}
-
-/* texto do motivo se a campanha não aceita mais doações; '' se aceita */
-function campanhaFechada(c) {
-  if (!c) return '';
-  if (c.status == 'ENCERRADA') return 'Esta campanha foi encerrada e não recebe mais doações.';
-  const fim = fimDoPrazo(c.limite);
-  if (fim && fim < Date.now()) return 'O prazo desta campanha terminou e ela não recebe mais doações.';
-  return '';
-}
-
-const aviso = (txt, on = 'feed') => shell(`<div class="card emp">${txt}</div>`, on, { rightCol: 0 });
-
-const dataHora = (v) => {
-  const t = new Date(v).getTime();
-  return t ? new Date(t).toLocaleString('pt-BR') : '';
-};
-
-const uuid = () =>
-  window.crypto && crypto.randomUUID
-    ? crypto.randomUUID()
-    : 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 14);
-
-/* ======================= status da doação ======================= */
-
-const ST_ROTULO = {
-  PENDENTE: 'AGUARDANDO PAGAMENTO',
-  APROVADO: 'APROVADO',
-  REJEITADO: 'NÃO APROVADO',
-  EXPIRADO: 'EXPIRADO',
-  ESTORNADO: 'ESTORNADO',
-};
-const ST_CLASSE = { PENDENTE: 'warn', REJEITADO: 'bad', EXPIRADO: 'bad', ESTORNADO: 'bad' };
-
-const statusDoacaoHtml = (s) =>
-  `<span class="tag ${ST_CLASSE[s] || ''}" style="margin:0">${esc(ST_ROTULO[s] || s)}</span>`;
-
-/* resposta do back (doação) -> objeto usado pelas telas */
-function adaptDoacaoApi(r = {}) {
-  const pix = r.pix || {};
-  return {
-    id: r.id ?? r.comprovante_id ?? null,
-    status: String(r.status || 'PENDENTE').toUpperCase(),
-    valor: +(r.valor ?? r.amount) || 0,
-    metodo: r.metodo || r.metodo_pagamento || 'PIX',
-    data: dataHora(r.created_at),
-    pagoEm: dataHora(r.paid_at),
-    projeto: r.projeto || '',
-    ong: r.ong_nome || r.ong || '',
-    ongId: r.ong_id ?? null,
-    postId: r.post_id ?? null,
-    cpfMasc: r.cpf_mascarado || '',
-    msg: r.mensagem || '',
-    pixCopia: pix.copia_e_cola || r.pix_copia_e_cola || '',
-    pixQr: pix.qr_code_base64 || r.pix_qr_base64 || '',
-    expira: pix.expires_at || r.expires_at || '',
-    checkout: r.checkout_url || '',
-  };
-}
-
-/* junta o que já se sabia com a resposta nova (a resposta pode vir com menos campos) */
-function mesclarDoacao(antes, novo) {
-  if (!antes) return novo;
-  const r = { ...antes };
-  Object.keys(novo).forEach((k) => {
-    if (novo[k] !== '' && novo[k] !== null && novo[k] !== undefined) r[k] = novo[k];
-  });
-  r.status = novo.status;
-  return r;
-}
-
-/* ======================= consulta de doações no back ======================= */
-
-const DOACAO = {}; /* id -> doação (cache desta sessão) */
-const DOACAO_BUSY = new Set();
-const DOACAO_ERRO = {};
-const DOACAO_T0 = {}; /* quando começou a acompanhar (para parar de consultar) */
-let DOACAO_TMR = 0;
-
-const POLL_MS = 4000;
-const POLL_MAX_MS = 20 * 60 * 1000;
-
-const rotaRecibo = (id) => location.hash.replace(/^#\//, '').split('/').slice(0, 2).join('/') == 'recibo/' + id;
-
-function agendarPoll(id) {
-  clearTimeout(DOACAO_TMR);
-  const d = DOACAO[id];
-  if (!d || d.status != 'PENDENTE' || !rotaRecibo(id)) return;
-
-  if (!DOACAO_T0[id]) DOACAO_T0[id] = Date.now();
-  if (Date.now() - DOACAO_T0[id] > POLL_MAX_MS) return; /* depois disso, só pelo botão "Verificar" */
-
-  DOACAO_TMR = setTimeout(() => {
-    if (rotaRecibo(id)) carregarDoacao(id);
-  }, POLL_MS);
-}
-
-/* pagamento confirmado nesta sessão: avisa e atualiza a barra da campanha sem recarregar o feed */
-function aprovouAgora(d) {
-  toast('Pagamento confirmado. Obrigado por doar!');
-  MINHAS_OK = false;
-
-  if (d.postId && !d.creditado) {
-    d.creditado = true;
-    const p = POSTS.find((x) => x.id == d.postId);
-    if (p && p.camp) p.camp.atual = (+p.camp.atual || 0) + d.valor;
-  }
-}
-
-function carregarDoacao(id, aoFim) {
-  id = String(id);
-  if (DOACAO_BUSY.has(id)) return;
-  DOACAO_BUSY.add(id);
-
-  const antes = DOACAO[id];
-
-  Promise.resolve()
-    .then(() => API.buscarDoacao(id))
-    .then((r) => {
-      const novo = mesclarDoacao(antes, adaptDoacaoApi(r));
-      if (novo.id == null) novo.id = id;
-      DOACAO[id] = novo;
-      delete DOACAO_ERRO[id];
-
-      if (antes && antes.status == 'PENDENTE' && novo.status == 'APROVADO') aprovouAgora(novo);
-      return !antes || antes.status != novo.status;
-    })
-    .catch((e) => {
-      console.error('Falha ao consultar a doação:', e);
-      /* com dados já na tela, uma falha de rede na consulta periódica é ignorada */
-      if (!antes) {
-        DOACAO_ERRO[id] =
-          e && e.status == 404
-            ? 'Comprovante não encontrado.'
-            : (e && e.name == 'ApiError' && e.message) || 'Não foi possível carregar o comprovante agora.';
-        return true;
-      }
-      return false;
-    })
-    .then((mudou) => {
-      DOACAO_BUSY.delete(id);
-      if (aoFim) aoFim(mudou);
-      if (rotaRecibo(id)) {
-        if (mudou) go();
-        agendarPoll(id);
-      }
-    });
-}
-
-function recarregarDoacao(id) {
-  delete DOACAO_ERRO[id];
-  go();
-}
-
-/* botão "Já paguei, verificar agora" */
-function verificarAgora(id, btn) {
-  if (btn.dataset.busy) return;
-  const antes = btn.innerHTML;
-  btn.dataset.busy = '1';
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spin" aria-hidden="true"></span> Verificando…';
-
-  DOACAO_T0[id] = Date.now(); /* reinicia a consulta automática */
-  carregarDoacao(id, (mudou) => {
-    if (btn.isConnected) {
-      btn.disabled = false;
-      btn.innerHTML = antes;
-      delete btn.dataset.busy;
-    }
-    if (!mudou) toast('Ainda não identificamos o pagamento. Assim que for confirmado, esta tela atualiza.');
-  });
-}
-
-/* ---- histórico (perfil do doador) ---- */
-let MINHAS_OK = false;
-let MINHAS_ERRO = false;
-let MINHAS_BUSY = false;
-
-function carregarMinhasDoacoes() {
-  if (DEMO || MINHAS_BUSY) return;
-  MINHAS_BUSY = true;
-  MINHAS_ERRO = false;
-
-  Promise.resolve()
-    .then(() => API.minhasDoacoes())
-    .then((r) => {
-      const linhas = Array.isArray(r) ? r : (r && (r.donations || r.doacoes)) || [];
-      DONATIONS.length = 0;
-      DONATIONS.push(...linhas.map(adaptDoacaoApi));
-      MINHAS_OK = true;
-    })
-    .catch((e) => {
-      console.error('Falha ao carregar o histórico de doações:', e);
-      MINHAS_ERRO = true;
-    })
-    .finally(() => {
-      MINHAS_BUSY = false;
-      if (/^#\/perfil/.test(location.hash)) go();
-    });
-}
-
-function tentarHistoricoDeNovo() {
-  MINHAS_ERRO = false;
-  go();
-}
-
-/* ======================= telas ======================= */
-
-/* doação ligada a uma campanha (post) */
 V.doar = (id) => {
   const p = POSTS.find((x) => x.id == id);
   const o = p && ong(p.ong);
 
-  if (!p || !p.camp || !o) return aviso('Campanha não encontrada.');
+  if (!p || !p.camp || !o) {
+    return shell('<div class="card emp">Campanha não encontrada.</div>', 'feed', { rightCol: 0 });
+  }
 
-  const bloqueio = bloqueioDoador() || campanhaFechada(p.camp);
-  if (bloqueio) return aviso(bloqueio);
+  if (p.camp.status == 'ENCERRADA') {
+    return shell(
+      '<div class="card emp">Esta campanha foi encerrada e não recebe mais doações.</div>',
+      'feed',
+      { rightCol: 0 }
+    );
+  }
 
-  if (!DEMO && p.camp.id == null) return aviso('Esta campanha não está disponível para doação no momento.');
+  /* modo real: o id da campanha já vem do feed (api-feed.js -> adaptApi.post -> camp.id).
+     Sem ele não dá para identificar a campanha no back; melhor avisar do que doar errado. */
+  if (!DEMO && p.camp.id == null) {
+    return shell(
+      `<div class="top"><h1>Fazer uma doação</h1></div>
+       <div class="card emp">Não foi possível identificar esta campanha. Atualize o feed e tente novamente.<br><br><a class="btn light sm" href="#/feed">Voltar ao feed</a></div>`,
+      'feed',
+      { rightCol: 0 }
+    );
+  }
 
-  const cabecalho = `
-    <div class="ph" style="padding:0 0 12px">
-      ${av(o.name, o.h)}
-      <div><b>${esc(o.name)}</b><small>${esc(p.text.slice(0, 90))}</small></div>
-    </div>
-    <div class="bar"><b style="width:${pctOf(p.camp)}%"></b></div>
-    <div class="pg2"><b>${money(p.camp.atual)}</b> de ${money(p.camp.meta)}</div>`;
-
-  return telaDoacao({ o, cabecalho, campaignId: p.camp.id, postId: p.id });
-};
-
-/* doação direta ao perfil da ONG, sem campanha */
-V['doar-ong'] = (ongId) => {
-  const o = ong(ongId);
-  if (!o) return aviso('ONG não encontrada.');
-
-  const bloqueio = bloqueioDoador();
-  if (bloqueio) return aviso(bloqueio);
-
-  const cabecalho = `
-    <div class="ph" style="padding:0 0 12px">
-      ${av(o.name, o.h)}
-      <div><b>${esc(o.name)}</b><small>Doação direta para a ONG</small></div>
-    </div>`;
-
-  return telaDoacao({ o, cabecalho, ongId: o.id });
-};
-
-function telaDoacao({ o, cabecalho, campaignId = null, postId = null, ongId = null }) {
+  const c = p.camp;
   const free = temRecurso('valorLivre');
-  if (DON.ong != o.id) DON = { valor: 0, met: 'PIX', cpf: DON.cpf || '', msg: '', ong: o.id };
+
+  /* Pix: a doação vai para a chave da ONG (destino) e o doador informa a chave de onde envia (remetente) */
+  if (DON.ong != o.id) DON = { ...DON, ong: o.id, pixSel: '', pixOut: '' };
+  const pixDestino = pixDaChaveOng(o);
+  if (!pixDestino && DON.met == 'PIX') DON.met = 'CARTAO';
 
   const presetsHtml = PRESETS
     .map((v) => `<button class="amt ${DON.valor == v ? 'on' : ''}" data-v="${v}" onclick="setAmt(${v})">${money(v)}</button>`)
@@ -298,40 +45,47 @@ function telaDoacao({ o, cabecalho, campaignId = null, postId = null, ongId = nu
     ['PIX', 'Pix'],
     ['CARTAO', 'Cartão de crédito'],
   ]
-    .map((m) => `<button class="mt ${DON.met == m[0] ? 'on' : ''}" data-m="${m[0]}" onclick="setMet('${m[0]}')">${m[1]}</button>`)
+    .map((m) => {
+      const semPix = m[0] == 'PIX' && !pixDestino;
+      return `<button class="mt ${DON.met == m[0] ? 'on' : ''}" data-m="${m[0]}" ${semPix ? 'disabled title="Esta ONG ainda não cadastrou chave Pix"' : ''} onclick="setMet('${m[0]}')">${m[1]}</button>`;
+    })
     .join('');
-
-  const outroValor = DON.valor && !PRESETS.includes(DON.valor) ? DON.valor : '';
-
-  const rodape = DEMO
-    ? '<b>Modo demonstração:</b> nenhum pagamento real é feito.'
-    : 'O pagamento é processado por um gateway de pagamento parceiro. O Civvo não armazena dados de cartão. Você acompanha o status no comprovante.';
 
   const content = `
     <div class="top"><h1>Fazer uma doação</h1></div>
-    <div class="card dcard">${cabecalho}</div>
+    <div class="card dcard">
+      <div class="ph" style="padding:0 0 12px">
+        ${av(o.name, o.h)}
+        <div>
+          <b>${esc(o.name)}</b>
+          <small>${esc(p.text.slice(0, 90))}</small>
+        </div>
+      </div>
+      <div class="bar"><b style="width:${pctOf(c)}%"></b></div>
+      <div class="pg2"><b>${money(c.atual)}</b> de ${money(c.meta)}</div>
+    </div>
     <div class="card dcard">
       <label style="margin-top:0">Valor</label>
       <div class="amts">${presetsHtml}</div>
       <label for="vl">Outro valor ${free ? '' : '(disponível no plano apoiador)'}</label>
-      <input id="vl" class="in" type="number" min="${VALOR_MIN}" max="${VALOR_MAX}" step="0.01" inputmode="decimal" value="${outroValor}" ${free ? '' : 'disabled'} oninput="digitarValor(this.value)">
-      <small style="color:var(--mut)">De ${money(VALOR_MIN)} a ${money(VALOR_MAX)} por doação.</small>
+      <input id="vl" class="in" type="number" min="1" ${free ? '' : 'disabled'} oninput="DON.valor=+this.value">
       <label>Forma de pagamento</label>
       <div class="seg">${metodosHtml}</div>
-      <div id="metBox">${metodoInfoHtml()}</div>
+      ${pixDestino ? '' : '<small style="color:var(--mut)">Esta ONG ainda não cadastrou chave Pix: use o cartão.</small>'}
+      <div id="pixBox">${pixBoxHtml()}</div>
       <label for="cpf">CPF do doador</label>
-      <input id="cpf" class="in" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" value="${esc(DON.cpf || USER.cpf || '')}" oninput="DON.cpf=this.value">
-      <small style="color:var(--mut)">Exigido pelo meio de pagamento. Também identifica a doação no comprovante e na declaração de IRPF.</small>
-      <label for="msg">Mensagem para a ONG (opcional)</label>
-      <textarea id="msg" class="in" rows="2" maxlength="${MSG_MAX}" placeholder="Deixe um recado de apoio" oninput="DON.msg=this.value">${esc(DON.msg || '')}</textarea>
+      <input id="cpf" class="in" inputmode="numeric" placeholder="000.000.000-00" value="${esc(DON.cpf || USER.cpf)}" oninput="DON.cpf=this.value">
+      <small style="color:var(--mut)">O CPF identifica a doação no comprovante e na declaração de IRPF.</small>
       <p class="dn-err" id="derr" role="alert"></p>
-      <button class="btn full" onclick="confirmDon(${campaignId ?? 'null'}, ${postId ?? 'null'}, ${ongId ?? 'null'}, this)">Continuar para o pagamento</button>
-      <p class="dn-aviso">${rodape}</p>
+      <button class="btn full" onclick="confirmDon(${p.id}, this)">Confirmar doação</button>
+      <p style="color:var(--mut);font-size:12px;margin-top:12px">
+        O pagamento é processado por gateway certificado (PCI DSS). Seus dados de cartão não ficam armazenados no Civvo. Você recebe o comprovante e a ONG é notificada.
+      </p>
     </div>
   `;
 
   return shell(content, 'feed', { rightCol: 0 });
-}
+};
 
 function setAmt(v) {
   DON.valor = v;
@@ -340,357 +94,352 @@ function setAmt(v) {
   if (i) i.value = '';
 }
 
-/* valor digitado em "Outro valor": desmarca os atalhos (a não ser que coincida com um deles) */
-function digitarValor(v) {
-  DON.valor = +v || 0;
-  document.querySelectorAll('.amt').forEach((b) => b.classList.toggle('on', +b.dataset.v == DON.valor));
+/* chave Pix da ONG ({tipo, chave}) ou null */
+function pixDaChaveOng(o) {
+  const k = String((o && o.pix) || '').trim();
+  return k ? { tipo: pixTipo(k) || 'Chave', chave: k } : null;
 }
 
-/* explica o que acontece ao confirmar, conforme o método */
-function metodoInfoHtml() {
-  const txt =
-    DON.met == 'PIX'
-      ? 'Ao continuar, geramos um QR Code e um código Pix Copia e Cola para você pagar no app do seu banco. O código tem prazo para expirar.'
-      : 'Ao continuar, você será levado à página segura do gateway de pagamento para informar os dados do cartão. O Civvo não vê nem guarda esses dados.';
-  return `<small style="color:var(--mut);display:block;margin-top:8px">${txt}</small>`;
+/* bloco do Pix na doação: chave de destino (da ONG, com botão copiar) e chave de origem (do doador) */
+function pixBoxHtml() {
+  const o = ong(DON.ong);
+  if (DON.met != 'PIX' || !o) return '';
+
+  const dest = pixDaChaveOng(o);
+  if (!dest) return '';
+
+  const minhas = pixDoDoador();
+  if (!DON.pixSel) DON.pixSel = minhas.length ? String(minhas[0].id) : '__outra';
+  const outra = DON.pixSel == '__outra';
+
+  const opcoes = minhas
+    .map((x) => `<option value="${x.id}" ${String(x.id) == DON.pixSel ? 'selected' : ''}>${esc(x.tipo)}: ${esc(pixMascara(x.chave, x.tipo))}</option>`)
+    .join('');
+
+  return `
+    <label style="margin-top:14px">Pix da ONG (destino)</label>
+    <div class="pxd" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid rgba(127,127,127,.3);border-radius:10px">
+      <div style="min-width:0">
+        <b style="word-break:break-all">${esc(dest.chave)}</b>
+        <small style="display:block;color:var(--mut)">${esc(dest.tipo)} · ${esc(o.name)}</small>
+      </div>
+      <button type="button" class="btn light sm" data-k="${esc(dest.chave)}" onclick="copiarPix(this)">Copiar</button>
+    </div>
+    <label for="pxO">Seu Pix (remetente)</label>
+    <select id="pxO" class="in" onchange="setPixOrigem(this.value)">
+      ${opcoes}
+      <option value="__outra" ${outra ? 'selected' : ''}>Informar outra chave</option>
+    </select>
+    <input id="pxOut" class="in" style="margin-top:8px" ${outra ? '' : 'hidden'} autocomplete="off" placeholder="CPF, CNPJ, e-mail, celular ou chave aleatória" value="${esc(DON.pixOut || '')}" oninput="DON.pixOut=this.value">
+    <small style="color:var(--mut)">Pague pelo app do seu banco para a chave da ONG, a partir da chave remetente acima. Assim a doação é identificada.</small>`;
 }
 
-function setMet(m) {
-  DON.met = m;
-  document.querySelectorAll('.mt').forEach((b) => b.classList.toggle('on', b.dataset.m == m));
-  const box = $('#metBox');
-  if (box) box.innerHTML = metodoInfoHtml();
+function setPixOrigem(v) {
+  DON.pixSel = v;
+  const i = $('#pxOut');
+  if (i) i.hidden = v != '__outra';
 }
 
 async function copiarPix(btn) {
   try {
     await navigator.clipboard.writeText(btn.dataset.k);
-    toast('Código Pix copiado.');
+    toast('Chave Pix copiada.');
   } catch {
-    prompt('Copie o código Pix:', btn.dataset.k);
+    prompt('Copie a chave Pix:', btn.dataset.k);
   }
 }
 
-/* ======================= envio ======================= */
-
-/* devolve o texto do primeiro problema, ou '' se está tudo certo */
-function validarDoacao(postId) {
-  const bloqueio = bloqueioDoador();
-  if (bloqueio) return bloqueio;
-
-  if (postId) {
-    const p = POSTS.find((x) => x.id == postId);
-    const fechada = campanhaFechada(p && p.camp);
-    if (fechada) return fechada;
-  }
-
-  const v = DON.valor;
-  if (!(v > 0)) return 'Escolha um valor para doar.';
-  if (v < VALOR_MIN) return `O valor mínimo é ${money(VALOR_MIN)}.`;
-  if (v > VALOR_MAX) return `O valor máximo por doação é ${money(VALOR_MAX)}.`;
-  if (Math.abs(v * 100 - Math.round(v * 100)) > 1e-6) return 'Use no máximo 2 casas decimais no valor.';
-
-  if (!cpfOk(DON.cpf || USER.cpf || '')) return 'Informe um CPF válido, com 11 dígitos.';
-
-  if (String(DON.msg || '').length > MSG_MAX) return `A mensagem pode ter até ${MSG_MAX} caracteres.`;
-
-  return '';
+function setMet(m) {
+  DON.met = m;
+  document.querySelectorAll('.mt').forEach((b) => b.classList.toggle('on', b.dataset.m == m));
+  const box = $('#pixBox');
+  if (box) box.innerHTML = pixBoxHtml();
 }
 
-const mascararCpf = (cpf) => {
-  const d = String(cpf || '').replace(/\D/g, '');
-  return d.length == 11 ? `***.${d.slice(3, 6)}.${d.slice(6, 9)}-**` : '';
-};
-
-function mensagemErroDoacao(err) {
-  if (err && err.name == 'ApiError') {
-    if (err.status === 0 && /demorou/i.test(err.message)) {
-      return 'O servidor demorou para responder e não sabemos se a doação foi criada. Confira em Perfil > histórico de doações antes de tentar de novo, para não gerar duas cobranças.';
-    }
-    return err.message || 'Não foi possível iniciar o pagamento agora.';
-  }
-  return 'Não foi possível iniciar o pagamento agora.';
-}
-
-function ocupar(btn, texto) {
-  btn.dataset.busy = '1';
-  btn.disabled = true;
-  btn.setAttribute('aria-busy', 'true');
-  btn.innerHTML = `<span class="spin" aria-hidden="true"></span> ${texto}`;
-}
-
-function liberar(btn, antes) {
-  if (!btn.isConnected) return;
-  btn.disabled = false;
-  btn.removeAttribute('aria-busy');
-  btn.innerHTML = antes;
-  delete btn.dataset.busy;
-}
-
-async function confirmDon(campaignId, postId, ongId, btn) {
-  if (btn.dataset.busy) return;
-
+async function confirmDon(pid, btn) {
+  const cpf = (DON.cpf || USER.cpf || '').replace(/\D/g, '');
   const e = $('#derr');
+  const p = POSTS.find((x) => x.id == pid);
   e.textContent = '';
 
-  const o = ong(DON.ong);
-  if (!o) return;
-
-  const erro = validarDoacao(postId);
-  if (erro) {
-    e.textContent = erro;
+  if (!(DON.valor > 0)) {
+    e.textContent = 'Escolha um valor para doar.';
     return;
   }
 
-  const cpf = (DON.cpf || USER.cpf || '').replace(/\D/g, '');
-  const valor = Math.round(DON.valor * 100) / 100;
-  const mensagem = String(DON.msg || '').trim().slice(0, MSG_MAX);
-  const p = postId ? POSTS.find((x) => x.id == postId) : null;
-  const projeto = p ? p.text.slice(0, 60) : 'Doação direta';
+  if (cpf.length != 11) {
+    e.textContent = 'Informe um CPF válido, com 11 dígitos.';
+    return;
+  }
 
-  /* ---------- modo real: cria a cobrança no back/gateway ---------- */
-  if (!DEMO) {
-    /* mesma chave enquanto os dados forem os mesmos: se a resposta se perder (timeout) e o doador
-       clicar de novo, o back devolve a doação já criada em vez de cobrar duas vezes */
-    const assinatura = [campaignId || '', campaignId ? '' : ongId || o.id, valor, DON.met, cpf, mensagem].join('|');
-    if (DON.chaveAss !== assinatura) {
-      DON.chave = uuid();
-      DON.chaveAss = assinatura;
+  let pixOrigem = '';
+  let pixDestino = '';
+
+  if (DON.met == 'PIX') {
+    pixDestino = String(ong(p.ong).pix || '').trim();
+    if (!pixDestino) {
+      e.textContent = 'Esta ONG ainda não cadastrou chave Pix. Use o cartão.';
+      return;
     }
 
-    const antes = btn.innerHTML;
-    ocupar(btn, 'Gerando pagamento…');
+    if (DON.pixSel && DON.pixSel != '__outra') {
+      pixOrigem = (pixDoDoador().find((x) => String(x.id) == DON.pixSel) || {}).chave || '';
+    } else {
+      pixOrigem = ($('#pxOut')?.value || DON.pixOut || '').trim();
+    }
 
-    try {
-      const r = await API.doar({
-        campaign_id: campaignId || null,
-        ong_id: campaignId ? null : ongId || o.id,
-        amount: valor,
-        mensagem,
-        cpf,
+    if (!pixTipo(pixOrigem)) {
+      e.textContent = `Informe a chave Pix de onde você vai enviar. ${PIX_ERRO}`;
+      return;
+    }
+  }
+
+  let novoId = null;
+  let respostaApi = null;
+
+  const ok = await comEspera(btn, 'Processando…', async () => {
+    /* modo real: o back cria a doação e a cobrança no gateway (mock ou Mercado Pago) e devolve o id definitivo */
+    if (!DEMO) {
+      respostaApi = await API.doar({
+        campaign_id: p.camp.id,
+        amount: DON.valor,
         metodo: DON.met,
-        idempotency_key: DON.chave,
+        cpf,
+        mensagem: '',
+        /* evita cobrar duas vezes se a pessoa clicar de novo durante o processamento */
+        idempotency_key: `don-${pid}-${Date.now()}`,
       });
-
-      const d = adaptDoacaoApi({ ...((r && r.donation) || r || {}), pix: r && r.pix, checkout_url: r && r.checkout_url });
-
-      if (d.id == null) throw new Error('Resposta sem o código da doação.');
-
-      /* o que o front já sabe e o back pode não devolver na criação */
-      d.valor = d.valor || valor;
-      d.metodo = d.metodo || DON.met;
-      d.ong = d.ong || o.name;
-      d.ongId = d.ongId ?? o.id;
-      d.postId = d.postId ?? postId ?? null;
-      d.projeto = d.projeto || projeto;
-      d.cpfMasc = d.cpfMasc || mascararCpf(cpf);
-      d.msg = d.msg || mensagem;
-      d.data = d.data || dataHora(Date.now());
-
-      DOACAO[d.id] = d;
-      DOACAO_T0[d.id] = Date.now();
-      MINHAS_OK = false;
-      DON = { valor: 0, met: 'PIX', cpf, msg: '' };
-
-      /* cartão: segue para a página segura do gateway; ele devolve o doador para #/recibo/:id */
-      if (d.metodo == 'CARTAO' && /^https:\/\//i.test(d.checkout)) {
-        location.assign(d.checkout);
-        return;
-      }
-
-      location.hash = '#/recibo/' + d.id;
-    } catch (err) {
-      e.textContent = mensagemErroDoacao(err);
-    } finally {
-      liberar(btn, antes);
+      novoId = respostaApi.donation.id;
+      return;
     }
-    return;
-  }
 
-  /* ---------- modo demo: simula aprovação localmente ---------- */
-  const d = {
-    id: Date.now(),
-    camp: postId,
-    valor,
-    status: 'PENDENTE',
-    data: new Date().toLocaleString('pt-BR'),
-    metodo: DON.met,
-    cpf,
-    projeto,
-    ong: o.name,
-    doador: USER.apelido_unico,
-    ongId: o.id,
-    msg: mensagem,
-  };
-
-  const ok = await comEspera(btn, 'Processando…', () => {
+    /* modo demo: simulação local, sem back */
+    const d = {
+      id: Date.now(),
+      camp: pid,
+      valor: DON.valor,
+      status: 'PENDENTE',
+      data: new Date().toLocaleString('pt-BR'),
+      metodo: DON.met,
+      pixOrigem,
+      pixDestino,
+      cpf,
+      projeto: p.text.slice(0, 60),
+      ong: ong(p.ong).name,
+      doador: USER.apelido_unico,
+      ongId: p.ong,
+    };
     DONATIONS.push(d);
-    notify('doador', 'DOACAO', `Doação de ${money(d.valor)} para ${d.ong} registrada. Acompanhe o comprovante.`, '#/recibo/' + d.id);
-    notify('ong', 'DOACAO', `Nova doação de ${money(d.valor)} em análise (${d.metodo == 'PIX' ? 'Pix' : 'cartão'}).`, '#/painel');
+    novoId = d.id;
+
+    notify(
+      'doador',
+      'DOACAO',
+      `Doação de ${money(d.valor)} para ${d.ong} registrada. Acompanhe o comprovante.`,
+      '#/recibo/' + d.id
+    );
+    notify(
+      'ong',
+      'DOACAO',
+      `Nova doação de ${money(d.valor)} em análise (${d.metodo == 'PIX' ? `Pix de ${pixMascara(d.pixOrigem, pixTipo(d.pixOrigem))}` : 'cartão'}).`,
+      '#/painel'
+    );
   });
 
   if (!ok) return;
 
-  DON = { valor: 0, met: 'PIX', cpf: '', msg: '' };
-  location.hash = '#/recibo/' + d.id;
+  DON = { valor: 0, met: 'PIX', cpf: '' };
+
+  /* cartão no modo real: o Mercado Pago precisa da própria página de checkout (dados do cartão não passam pelo Civvo) */
+  if (!DEMO && respostaApi?.checkout_url) {
+    location.href = respostaApi.checkout_url;
+    return;
+  }
+
+  location.hash = '#/recibo/' + novoId;
 }
 
-/* ======================= comprovante ======================= */
-
 const ST_TXT = {
-  PENDENTE: 'Aguardando a confirmação do pagamento.',
-  APROVADO: 'Pagamento confirmado. Obrigado por doar!',
-  REJEITADO: 'O pagamento não foi aprovado. Nenhum valor foi cobrado. Você pode tentar de novo ou usar outra forma de pagamento.',
-  EXPIRADO: 'O prazo para pagar terminou e a cobrança foi cancelada. Se você já pagou, fale com o suporte; caso contrário, faça uma nova doação.',
-  ESTORNADO: 'Este pagamento foi estornado e o valor devolvido.',
+  PENDENTE: 'Pagamento em análise. Este comprovante é atualizado quando for aprovado.',
+  APROVADO: 'Pagamento aprovado. O valor já está a caminho do projeto.',
+  REJEITADO: 'Pagamento não aprovado. Tente novamente ou use outra forma de pagamento.',
+  EXPIRADO: 'O prazo para pagamento expirou. Faça uma nova doação se ainda quiser contribuir.',
+  ESTORNADO: 'Este pagamento foi estornado.',
 };
 
-V.recibo = (id) => (DEMO ? reciboDemo(id) : reciboReal(id));
+/* ---------------------------------------------------------------------
+   Modo real: cache simples do comprovante + polling leve enquanto PENDENTE
+   (o back só confere o gateway a cada 15s por doação, então aqui também
+   não adianta martelar: 8s é suficiente para o doador ver a atualização). */
+const RECIBOS = new Map();
+const RECIBO_PROMISE = new Map();
+const RECIBO_ERRO = new Map();
+const RECIBO_POLL_ATIVO = new Set();
 
-/* campos comuns do comprovante */
-function reciboLinhas(d) {
+function carregarRecibo(id) {
+  if (RECIBO_PROMISE.has(id)) return RECIBO_PROMISE.get(id);
+
+  const p = API.buscarDoacao(id)
+    .then((d) => {
+      RECIBOS.set(id, d);
+      RECIBO_ERRO.delete(id);
+    })
+    .catch((e) => {
+      RECIBO_ERRO.set(id, e.name == 'ApiError' && e.message ? e.message : 'Não foi possível carregar o comprovante.');
+    })
+    .finally(() => {
+      RECIBO_PROMISE.delete(id);
+      go();
+    });
+
+  RECIBO_PROMISE.set(id, p);
+  return p;
+}
+
+function agendarConferenciaRecibo(id) {
+  if (RECIBO_POLL_ATIVO.has(id)) return;
+  RECIBO_POLL_ATIVO.add(id);
+
+  const tick = async () => {
+    /* a pessoa saiu da tela deste comprovante: para de consultar */
+    if (!location.hash.startsWith('#/recibo/' + id)) {
+      RECIBO_POLL_ATIVO.delete(id);
+      return;
+    }
+    RECIBO_PROMISE.delete(id); // força buscar de novo, ignorando o cache
+    await carregarRecibo(id);
+    const atual = RECIBOS.get(id);
+    if (atual && atual.status === 'PENDENTE') {
+      setTimeout(tick, 8000);
+    } else {
+      RECIBO_POLL_ATIVO.delete(id);
+    }
+  };
+
+  setTimeout(tick, 8000);
+}
+
+/* botão de teste: só funciona enquanto o back estiver com PAYMENT_PROVIDER=mock e fora de produção.
+   Remover quando o Mercado Pago real entrar em uso — nesse momento o back passa a recusar com 404. */
+async function simularAprovacao(id, btn) {
+  const ok = await comEspera(btn, 'Simulando…', () => API.simularPagamentoDoacao(id));
+  if (!ok) return;
+  RECIBO_PROMISE.delete(id);
+  await carregarRecibo(id);
+  toast('Pagamento simulado como aprovado.');
+}
+
+function reciboHtml(d, { podeSimular = false } = {}) {
+  const cl = d.status == 'PENDENTE' ? 'warn' : (d.status == 'REJEITADO' || d.status == 'EXPIRADO') ? 'bad' : '';
   const metodoPagamento = d.metodo == 'PIX' ? 'Pix' : 'Cartão de crédito';
+
+  const pixHtml = d.metodo == 'PIX' && d.pix
+    ? `<div class="pxd" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;margin-top:10px;border:1px solid rgba(127,127,127,.3);border-radius:10px">
+         <div style="min-width:0"><b style="word-break:break-all">${esc(d.pix.copia_e_cola)}</b><small style="display:block;color:var(--mut)">Pix copia e cola</small></div>
+         <button type="button" class="btn light sm" data-k="${esc(d.pix.copia_e_cola)}" onclick="copiarPix(this)">Copiar</button>
+       </div>`
+    : '';
+
+  const checkoutHtml = d.checkout_url
+    ? `<a class="btn full" style="margin-top:14px" href="${esc(d.checkout_url)}">Ir para o pagamento</a>`
+    : '';
+
+  const simularHtml = podeSimular && d.status == 'PENDENTE'
+    ? `<button class="btn light sm" style="margin-top:10px" onclick="simularAprovacao(${d.id}, this)">(teste) Simular aprovação do pagamento</button>`
+    : '';
+
   return `
+    <div class="top"><h1>Comprovante da doação</h1></div>
+    <div class="card rc">
+      <span class="tag ${cl}" style="margin:0">${d.status}</span>
+      <p style="margin-top:10px">${ST_TXT[d.status] || ''}</p>
+      <dl>
         <dt>Código</dt>
-        <dd>#${esc(String(d.id).slice(-6))}</dd>
-        ${d.data ? `<dt>Data</dt><dd>${esc(d.data)}</dd>` : ''}
-        ${d.pagoEm ? `<dt>Pago em</dt><dd>${esc(d.pagoEm)}</dd>` : ''}
+        <dd>#${String(d.id).slice(-6)}</dd>
+        <dt>Data</dt>
+        <dd>${esc(d.created_at ? new Date(d.created_at).toLocaleString('pt-BR') : '—')}</dd>
         <dt>Projeto</dt>
-        <dd>${esc(d.projeto || 'Doação direta')}</dd>
+        <dd>${esc(d.projeto)}</dd>
         <dt>ONG</dt>
-        <dd>${esc(d.ong || '—')}</dd>
+        <dd>${esc(d.ong_nome)}</dd>
         <dt>Valor</dt>
         <dd>${money(d.valor)}</dd>
         <dt>Pagamento</dt>
         <dd>${metodoPagamento}</dd>
         <dt>CPF</dt>
-        <dd>${esc(d.cpfMasc || '—')}</dd>
-        ${d.msg ? `<dt>Mensagem</dt><dd>${esc(d.msg)}</dd>` : ''}`;
-}
-
-/* QR Code + copia e cola (só imprime base64 puro, para nada estranho entrar no src) */
-function blocoPix(d) {
-  const qr = String(d.pixQr || '').replace(/\s/g, '');
-  const img = /^[A-Za-z0-9+/]+=*$/.test(qr)
-    ? `<img class="pix-qr" alt="QR Code do Pix" width="200" height="200" src="data:image/png;base64,${qr}">`
-    : '';
-  const expira = dataHora(d.expira);
-
-  return `
-    <div class="pix-box">
-      <p>Pague com Pix para concluir a doação. Esta tela atualiza sozinha quando o pagamento for confirmado.</p>
-      ${img}
-      ${
-        d.pixCopia
-          ? `<label>Pix Copia e Cola</label>
-             <div class="pxd">
-               <code class="pix-cod">${esc(d.pixCopia)}</code>
-               <button type="button" class="btn light sm" data-k="${esc(d.pixCopia)}" onclick="copiarPix(this)">Copiar</button>
-             </div>`
-          : '<small style="color:var(--mut)">Não foi possível exibir o código agora. Use o botão abaixo para verificar ou tente doar de novo.</small>'
-      }
-      ${expira ? `<small style="color:var(--mut);display:block;margin-top:8px">O código expira em ${esc(expira)}.</small>` : ''}
-      <ol class="pix-passos">
-        <li>Abra o app do seu banco e escolha Pix.</li>
-        <li>Leia o QR Code ou use o Pix Copia e Cola.</li>
-        <li>Confirme o pagamento. Pode levar alguns segundos para aparecer aqui.</li>
-      </ol>
-    </div>`;
-}
-
-function reciboReal(id) {
-  if (!/^\d+$/.test(String(id || ''))) return aviso('Comprovante não encontrado.', 'perfil');
-
-  const d = DOACAO[id];
-
-  if (!d) {
-    if (DOACAO_ERRO[id]) {
-      return shell(
-        `<div class="card emp">${esc(DOACAO_ERRO[id])}
-           <div class="acts" style="margin-top:12px">
-             <button class="btn light sm" onclick="recarregarDoacao('${id}')">Tentar de novo</button>
-             <a class="btn ghost sm" href="#/feed">Voltar ao feed</a>
-           </div>
-         </div>`,
-        'perfil',
-        { rightCol: 0 }
-      );
-    }
-    if (!DOACAO_BUSY.has(String(id))) carregarDoacao(id);
-    return shell('<div class="card emp" role="status" aria-busy="true">Carregando comprovante…</div>', 'perfil', { rightCol: 0 });
-  }
-
-  agendarPoll(id);
-
-  const pendente = d.status == 'PENDENTE';
-  const checkoutOk = d.metodo == 'CARTAO' && /^https:\/\//i.test(d.checkout);
-  const novaDoacao = d.postId ? '#/doar/' + d.postId : d.ongId ? '#/doar-ong/' + d.ongId : '#/feed';
-
-  const pagamento = pendente
-    ? d.metodo == 'PIX'
-      ? blocoPix(d)
-      : `<p>Estamos aguardando a confirmação do pagamento com cartão.</p>${
-          checkoutOk ? `<p><a class="btn sm" href="${esc(d.checkout)}">Continuar pagamento</a></p>` : ''
-        }`
-    : '';
-
-  const acoes = [
-    pendente ? `<button class="btn sm" onclick="verificarAgora('${id}', this)">Já paguei, verificar agora</button>` : '',
-    d.status == 'REJEITADO' || d.status == 'EXPIRADO' ? `<a class="btn sm" href="${novaDoacao}">Doar novamente</a>` : '',
-    '<button class="btn light sm" onclick="print()">Imprimir comprovante</button>',
-    '<a class="btn ghost sm" href="#/feed">Voltar ao feed</a>',
-  ].join('');
-
-  const content = `
-    <div class="top"><h1>Comprovante da doação</h1></div>
-    <div class="card rc">
-      ${statusDoacaoHtml(d.status)}
-      <p style="margin-top:10px">${ST_TXT[d.status] || ''}</p>
-      ${pagamento}
-      <dl>${reciboLinhas(d)}</dl>
-      <div class="acts">${acoes}</div>
-    </div>
-  `;
-
-  return shell(content, 'perfil', { rightCol: 0 });
-}
-
-/* modo demo: comprovante local */
-function reciboDemo(id) {
-  const d = DONATIONS.find((x) => x.id == id);
-  if (!d) return aviso('Comprovante não encontrado.', 'perfil');
-
-  const cl = d.status == 'PENDENTE' ? 'warn' : d.status == 'REJEITADO' ? 'bad' : '';
-  const cpf = d.cpf ? `***.${d.cpf.slice(3, 6)}.${d.cpf.slice(6, 9)}-**` : '—';
-
-  const content = `
-    <div class="top"><h1>Comprovante da doação</h1></div>
-    <div class="card rc">
-      <span class="tag ${cl}" style="margin:0">${d.status}</span>
-      <p style="margin-top:10px">Modo demonstração: nenhum pagamento real foi feito.</p>
-      <dl>
-        <dt>Código</dt>
-        <dd>#${String(d.id).slice(-6)}</dd>
-        <dt>Data</dt>
-        <dd>${esc(d.data)}</dd>
-        <dt>Projeto</dt>
-        <dd>${esc(d.projeto)}</dd>
-        <dt>ONG</dt>
-        <dd>${esc(d.ong)}</dd>
-        <dt>Valor</dt>
-        <dd>${money(d.valor)}</dd>
-        <dt>Pagamento</dt>
-        <dd>${d.metodo == 'PIX' ? 'Pix' : 'Cartão de crédito'}</dd>
-        <dt>CPF</dt>
-        <dd>${cpf}</dd>
-        ${d.msg ? `<dt>Mensagem</dt><dd>${esc(d.msg)}</dd>` : ''}
+        <dd>${d.cpf_mascarado || '—'}</dd>
       </dl>
+      ${pixHtml}
+      ${checkoutHtml}
+      ${simularHtml}
       <div class="acts">
         <button class="btn sm" onclick="print()">Imprimir comprovante</button>
         <a class="btn light sm" href="#/feed">Voltar ao feed</a>
       </div>
     </div>
   `;
-
-  return shell(content, 'perfil', { rightCol: 0 });
 }
+
+V.recibo = (idParam) => {
+  /* modo demo: segue 100% local, como antes */
+  if (DEMO) {
+    const d = DONATIONS.find((x) => x.id == idParam);
+    if (!d) {
+      return shell('<div class="card emp">Comprovante não encontrado.</div>', 'perfil', { rightCol: 0 });
+    }
+
+    const cl = d.status == 'PENDENTE' ? 'warn' : d.status == 'REJEITADO' ? 'bad' : '';
+    const cpf = d.cpf ? `***.${d.cpf.slice(3, 6)}.${d.cpf.slice(6, 9)}-**` : '—';
+    const metodoPagamento = d.metodo == 'PIX' ? 'Pix' : 'Cartão de crédito';
+
+    const content = `
+      <div class="top"><h1>Comprovante da doação</h1></div>
+      <div class="card rc">
+        <span class="tag ${cl}" style="margin:0">${d.status}</span>
+        <p style="margin-top:10px">${ST_TXT[d.status] || ''}</p>
+        <dl>
+          <dt>Código</dt>
+          <dd>#${String(d.id).slice(-6)}</dd>
+          <dt>Data</dt>
+          <dd>${esc(d.data)}</dd>
+          <dt>Projeto</dt>
+          <dd>${esc(d.projeto)}</dd>
+          <dt>ONG</dt>
+          <dd>${esc(d.ong)}</dd>
+          <dt>Valor</dt>
+          <dd>${money(d.valor)}</dd>
+          <dt>Pagamento</dt>
+          <dd>${metodoPagamento}</dd>
+          ${d.metodo == 'PIX' && d.pixDestino ? `<dt>Pix da ONG (destino)</dt><dd>${esc(d.pixDestino)}</dd>` : ''}
+          ${d.metodo == 'PIX' && d.pixOrigem ? `<dt>Pix do doador (origem)</dt><dd>${esc(pixMascara(d.pixOrigem, pixTipo(d.pixOrigem)))}</dd>` : ''}
+          <dt>CPF</dt>
+          <dd>${cpf}</dd>
+        </dl>
+        <div class="acts">
+          <button class="btn sm" onclick="print()">Imprimir comprovante</button>
+          <a class="btn light sm" href="#/feed">Voltar ao feed</a>
+        </div>
+      </div>
+    `;
+
+    return shell(content, 'perfil', { rightCol: 0 });
+  }
+
+  /* modo real: busca no back */
+  const id = Number(idParam);
+
+  if (RECIBO_ERRO.has(id)) {
+    return shell(`<div class="card emp">${esc(RECIBO_ERRO.get(id))}</div>`, 'perfil', { rightCol: 0 });
+  }
+
+  const d = RECIBOS.get(id);
+
+  if (!d) {
+    if (!RECIBO_PROMISE.has(id)) carregarRecibo(id);
+    return shell('<div class="card emp">Carregando comprovante…</div>', 'perfil', { rightCol: 0 });
+  }
+
+  if (d.status === 'PENDENTE') agendarConferenciaRecibo(id);
+
+  return shell(reciboHtml(d, { podeSimular: true }), 'perfil', { rightCol: 0 });
+};
