@@ -1,4 +1,3 @@
-
 const PRESETS = [20, 50, 100, 200];
 
 const pctOf = (c) => (c.meta ? Math.min(100, (c.atual / c.meta) * 100) : 0);
@@ -19,12 +18,12 @@ V.doar = (id) => {
     );
   }
 
-  /* modo real: a doação usa o id da campanha (CAMPAIGN_DETAILS.id), que o feed do back ainda não envia,
-     e o pagamento ainda não passa por um gateway */
-  if (!DEMO) {
+  /* modo real: o id da campanha já vem do feed (api-feed.js -> adaptApi.post -> camp.id).
+     Sem ele não dá para identificar a campanha no back; melhor avisar do que doar errado. */
+  if (!DEMO && p.camp.id == null) {
     return shell(
       `<div class="top"><h1>Fazer uma doação</h1></div>
-       <div class="card emp">As doações pelo app estarão disponíveis em breve.<br><br><a class="btn light sm" href="#/feed">Voltar ao feed</a></div>`,
+       <div class="card emp">Não foi possível identificar esta campanha. Atualize o feed e tente novamente.<br><br><a class="btn light sm" href="#/feed">Voltar ao feed</a></div>`,
       'feed',
       { rightCol: 0 }
     );
@@ -161,6 +160,7 @@ async function confirmDon(pid, btn) {
   const cpf = (DON.cpf || USER.cpf || '').replace(/\D/g, '');
   const e = $('#derr');
   const p = POSTS.find((x) => x.id == pid);
+  e.textContent = '';
 
   if (!(DON.valor > 0)) {
     e.textContent = 'Escolha um valor para doar.';
@@ -194,24 +194,44 @@ async function confirmDon(pid, btn) {
     }
   }
 
-  const d = {
-    id: Date.now(),
-    camp: pid,
-    valor: DON.valor,
-    status: 'PENDENTE',
-    data: new Date().toLocaleString('pt-BR'),
-    metodo: DON.met,
-    pixOrigem,
-    pixDestino,
-    cpf,
-    projeto: p.text.slice(0, 60),
-    ong: ong(p.ong).name,
-    doador: USER.apelido_unico,
-    ongId: p.ong,
-  };
+  let novoId = null;
+  let respostaApi = null;
 
-  const ok = await comEspera(btn, 'Processando…', () => {
+  const ok = await comEspera(btn, 'Processando…', async () => {
+    /* modo real: o back cria a doação e a cobrança no gateway (mock ou Mercado Pago) e devolve o id definitivo */
+    if (!DEMO) {
+      respostaApi = await API.doar({
+        campaign_id: p.camp.id,
+        amount: DON.valor,
+        metodo: DON.met,
+        cpf,
+        mensagem: '',
+        /* evita cobrar duas vezes se a pessoa clicar de novo durante o processamento */
+        idempotency_key: `don-${pid}-${Date.now()}`,
+      });
+      novoId = respostaApi.donation.id;
+      return;
+    }
+
+    /* modo demo: simulação local, sem back */
+    const d = {
+      id: Date.now(),
+      camp: pid,
+      valor: DON.valor,
+      status: 'PENDENTE',
+      data: new Date().toLocaleString('pt-BR'),
+      metodo: DON.met,
+      pixOrigem,
+      pixDestino,
+      cpf,
+      projeto: p.text.slice(0, 60),
+      ong: ong(p.ong).name,
+      doador: USER.apelido_unico,
+      ongId: p.ong,
+    };
     DONATIONS.push(d);
+    novoId = d.id;
+
     notify(
       'doador',
       'DOACAO',
@@ -229,28 +249,106 @@ async function confirmDon(pid, btn) {
   if (!ok) return;
 
   DON = { valor: 0, met: 'PIX', cpf: '' };
-  location.hash = '#/recibo/' + d.id;
+
+  /* cartão no modo real: o Mercado Pago precisa da própria página de checkout (dados do cartão não passam pelo Civvo) */
+  if (!DEMO && respostaApi?.checkout_url) {
+    location.href = respostaApi.checkout_url;
+    return;
+  }
+
+  location.hash = '#/recibo/' + novoId;
 }
 
 const ST_TXT = {
   PENDENTE: 'Pagamento em análise. Este comprovante é atualizado quando for aprovado.',
   APROVADO: 'Pagamento aprovado. O valor já está a caminho do projeto.',
   REJEITADO: 'Pagamento não aprovado. Tente novamente ou use outra forma de pagamento.',
+  EXPIRADO: 'O prazo para pagamento expirou. Faça uma nova doação se ainda quiser contribuir.',
+  ESTORNADO: 'Este pagamento foi estornado.',
 };
 
-V.recibo = (id) => {
-  const d = DONATIONS.find((x) => x.id == id);
-  if (!d) {
-    return shell('<div class="card emp">Comprovante não encontrado.</div>', 'perfil', {
-      rightCol: 0,
-    });
-  }
+/* ---------------------------------------------------------------------
+   Modo real: cache simples do comprovante + polling leve enquanto PENDENTE
+   (o back só confere o gateway a cada 15s por doação, então aqui também
+   não adianta martelar: 8s é suficiente para o doador ver a atualização). */
+const RECIBOS = new Map();
+const RECIBO_PROMISE = new Map();
+const RECIBO_ERRO = new Map();
+const RECIBO_POLL_ATIVO = new Set();
 
-  const cl = d.status == 'PENDENTE' ? 'warn' : d.status == 'REJEITADO' ? 'bad' : '';
-  const cpf = d.cpf ? `***.${d.cpf.slice(3, 6)}.${d.cpf.slice(6, 9)}-**` : '—';
+function carregarRecibo(id) {
+  if (RECIBO_PROMISE.has(id)) return RECIBO_PROMISE.get(id);
+
+  const p = API.buscarDoacao(id)
+    .then((d) => {
+      RECIBOS.set(id, d);
+      RECIBO_ERRO.delete(id);
+    })
+    .catch((e) => {
+      RECIBO_ERRO.set(id, e.name == 'ApiError' && e.message ? e.message : 'Não foi possível carregar o comprovante.');
+    })
+    .finally(() => {
+      RECIBO_PROMISE.delete(id);
+      go();
+    });
+
+  RECIBO_PROMISE.set(id, p);
+  return p;
+}
+
+function agendarConferenciaRecibo(id) {
+  if (RECIBO_POLL_ATIVO.has(id)) return;
+  RECIBO_POLL_ATIVO.add(id);
+
+  const tick = async () => {
+    /* a pessoa saiu da tela deste comprovante: para de consultar */
+    if (!location.hash.startsWith('#/recibo/' + id)) {
+      RECIBO_POLL_ATIVO.delete(id);
+      return;
+    }
+    RECIBO_PROMISE.delete(id); // força buscar de novo, ignorando o cache
+    await carregarRecibo(id);
+    const atual = RECIBOS.get(id);
+    if (atual && atual.status === 'PENDENTE') {
+      setTimeout(tick, 8000);
+    } else {
+      RECIBO_POLL_ATIVO.delete(id);
+    }
+  };
+
+  setTimeout(tick, 8000);
+}
+
+/* botão de teste: só funciona enquanto o back estiver com PAYMENT_PROVIDER=mock e fora de produção.
+   Remover quando o Mercado Pago real entrar em uso — nesse momento o back passa a recusar com 404. */
+async function simularAprovacao(id, btn) {
+  const ok = await comEspera(btn, 'Simulando…', () => API.simularPagamentoDoacao(id));
+  if (!ok) return;
+  RECIBO_PROMISE.delete(id);
+  await carregarRecibo(id);
+  toast('Pagamento simulado como aprovado.');
+}
+
+function reciboHtml(d, { podeSimular = false } = {}) {
+  const cl = d.status == 'PENDENTE' ? 'warn' : (d.status == 'REJEITADO' || d.status == 'EXPIRADO') ? 'bad' : '';
   const metodoPagamento = d.metodo == 'PIX' ? 'Pix' : 'Cartão de crédito';
 
-  const content = `
+  const pixHtml = d.metodo == 'PIX' && d.pix
+    ? `<div class="pxd" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;margin-top:10px;border:1px solid rgba(127,127,127,.3);border-radius:10px">
+         <div style="min-width:0"><b style="word-break:break-all">${esc(d.pix.copia_e_cola)}</b><small style="display:block;color:var(--mut)">Pix copia e cola</small></div>
+         <button type="button" class="btn light sm" data-k="${esc(d.pix.copia_e_cola)}" onclick="copiarPix(this)">Copiar</button>
+       </div>`
+    : '';
+
+  const checkoutHtml = d.checkout_url
+    ? `<a class="btn full" style="margin-top:14px" href="${esc(d.checkout_url)}">Ir para o pagamento</a>`
+    : '';
+
+  const simularHtml = podeSimular && d.status == 'PENDENTE'
+    ? `<button class="btn light sm" style="margin-top:10px" onclick="simularAprovacao(${d.id}, this)">(teste) Simular aprovação do pagamento</button>`
+    : '';
+
+  return `
     <div class="top"><h1>Comprovante da doação</h1></div>
     <div class="card rc">
       <span class="tag ${cl}" style="margin:0">${d.status}</span>
@@ -259,26 +357,89 @@ V.recibo = (id) => {
         <dt>Código</dt>
         <dd>#${String(d.id).slice(-6)}</dd>
         <dt>Data</dt>
-        <dd>${esc(d.data)}</dd>
+        <dd>${esc(d.created_at ? new Date(d.created_at).toLocaleString('pt-BR') : '—')}</dd>
         <dt>Projeto</dt>
         <dd>${esc(d.projeto)}</dd>
         <dt>ONG</dt>
-        <dd>${esc(d.ong)}</dd>
+        <dd>${esc(d.ong_nome)}</dd>
         <dt>Valor</dt>
         <dd>${money(d.valor)}</dd>
         <dt>Pagamento</dt>
         <dd>${metodoPagamento}</dd>
-        ${d.metodo == 'PIX' && d.pixDestino ? `<dt>Pix da ONG (destino)</dt><dd>${esc(d.pixDestino)}</dd>` : ''}
-        ${d.metodo == 'PIX' && d.pixOrigem ? `<dt>Pix do doador (origem)</dt><dd>${esc(pixMascara(d.pixOrigem, pixTipo(d.pixOrigem)))}</dd>` : ''}
         <dt>CPF</dt>
-        <dd>${cpf}</dd>
+        <dd>${d.cpf_mascarado || '—'}</dd>
       </dl>
+      ${pixHtml}
+      ${checkoutHtml}
+      ${simularHtml}
       <div class="acts">
         <button class="btn sm" onclick="print()">Imprimir comprovante</button>
         <a class="btn light sm" href="#/feed">Voltar ao feed</a>
       </div>
     </div>
   `;
+}
 
-  return shell(content, 'perfil', { rightCol: 0 });
+V.recibo = (idParam) => {
+  /* modo demo: segue 100% local, como antes */
+  if (DEMO) {
+    const d = DONATIONS.find((x) => x.id == idParam);
+    if (!d) {
+      return shell('<div class="card emp">Comprovante não encontrado.</div>', 'perfil', { rightCol: 0 });
+    }
+
+    const cl = d.status == 'PENDENTE' ? 'warn' : d.status == 'REJEITADO' ? 'bad' : '';
+    const cpf = d.cpf ? `***.${d.cpf.slice(3, 6)}.${d.cpf.slice(6, 9)}-**` : '—';
+    const metodoPagamento = d.metodo == 'PIX' ? 'Pix' : 'Cartão de crédito';
+
+    const content = `
+      <div class="top"><h1>Comprovante da doação</h1></div>
+      <div class="card rc">
+        <span class="tag ${cl}" style="margin:0">${d.status}</span>
+        <p style="margin-top:10px">${ST_TXT[d.status] || ''}</p>
+        <dl>
+          <dt>Código</dt>
+          <dd>#${String(d.id).slice(-6)}</dd>
+          <dt>Data</dt>
+          <dd>${esc(d.data)}</dd>
+          <dt>Projeto</dt>
+          <dd>${esc(d.projeto)}</dd>
+          <dt>ONG</dt>
+          <dd>${esc(d.ong)}</dd>
+          <dt>Valor</dt>
+          <dd>${money(d.valor)}</dd>
+          <dt>Pagamento</dt>
+          <dd>${metodoPagamento}</dd>
+          ${d.metodo == 'PIX' && d.pixDestino ? `<dt>Pix da ONG (destino)</dt><dd>${esc(d.pixDestino)}</dd>` : ''}
+          ${d.metodo == 'PIX' && d.pixOrigem ? `<dt>Pix do doador (origem)</dt><dd>${esc(pixMascara(d.pixOrigem, pixTipo(d.pixOrigem)))}</dd>` : ''}
+          <dt>CPF</dt>
+          <dd>${cpf}</dd>
+        </dl>
+        <div class="acts">
+          <button class="btn sm" onclick="print()">Imprimir comprovante</button>
+          <a class="btn light sm" href="#/feed">Voltar ao feed</a>
+        </div>
+      </div>
+    `;
+
+    return shell(content, 'perfil', { rightCol: 0 });
+  }
+
+  /* modo real: busca no back */
+  const id = Number(idParam);
+
+  if (RECIBO_ERRO.has(id)) {
+    return shell(`<div class="card emp">${esc(RECIBO_ERRO.get(id))}</div>`, 'perfil', { rightCol: 0 });
+  }
+
+  const d = RECIBOS.get(id);
+
+  if (!d) {
+    if (!RECIBO_PROMISE.has(id)) carregarRecibo(id);
+    return shell('<div class="card emp">Carregando comprovante…</div>', 'perfil', { rightCol: 0 });
+  }
+
+  if (d.status === 'PENDENTE') agendarConferenciaRecibo(id);
+
+  return shell(reciboHtml(d, { podeSimular: true }), 'perfil', { rightCol: 0 });
 };

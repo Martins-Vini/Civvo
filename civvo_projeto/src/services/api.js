@@ -149,6 +149,9 @@ export const excluirMomento = (momentId) => doEnvio('DELETE', `/moments/${id(mom
 
 /* ---- Doações ---- */
 export const doar = (payload) => doEnvio('POST', '/donations', payload);
+export const buscarDoacao = (donationId) => doGet(`/donations/${id(donationId)}`);
+/* só funciona com PAYMENT_PROVIDER=mock e fora de produção (o back recusa com 404 nos outros casos) */
+export const simularPagamentoDoacao = (donationId) => doEnvio('POST', `/donations/${id(donationId)}/simular-pagamento`);
 
 /* ---- Perfil do doador ---- */
 export const atualizarPerfilDoador = (payload) => doEnvio('PUT', '/donor/profile', payload);
