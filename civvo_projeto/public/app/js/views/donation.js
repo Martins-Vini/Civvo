@@ -6,6 +6,14 @@ V.doar = (id) => {
   const p = POSTS.find((x) => x.id == id);
   const o = p && ong(p.ong);
 
+  /* o feed não traz a chave Pix da ONG; busca o perfil completo (mesmo cache usado em V.ong)
+     e mescla no objeto, senão o Pix aparece "indisponível" mesmo quando a ONG já cadastrou */
+  if (!DEMO && o) {
+    const pf = ONG_PERFIL[o.id];
+    if (pf) Object.assign(o, pf.dados);
+    if (!pf || Date.now() - pf.ts > 60000) carregarPerfilOng(o.id);
+  }
+
   if (!p || !p.camp || !o) {
     return shell('<div class="card emp">Campanha não encontrada.</div>', 'feed', { rightCol: 0 });
   }

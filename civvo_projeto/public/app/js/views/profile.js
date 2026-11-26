@@ -231,7 +231,7 @@ function carregarPerfilOng(id) {
     })
     .finally(() => {
       PERFIL_BUSY.delete(id);
-      if (/^#\/(ong|perfil)/.test(location.hash)) go();
+      if (/^#\/(ong|perfil|doar)/.test(location.hash)) go();
     });
 }
 

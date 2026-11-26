@@ -143,7 +143,7 @@ function aplicarFeedReal(feed, curtidas, candidaturas, momentos = []) {
 
 async function buscarFeedReal() {
   const opcional = (p) => p.catch(() => []);
-  const [feed, curtidas, candidaturas, momentos, seguidas, vistos, meuPerfil] = await Promise.all([
+  const [feed, curtidas, candidaturas, momentos, seguidas, vistos, meuPerfil, doacoes] = await Promise.all([
     API.listarFeed(),
     opcional(API.historicoCurtidas()),
     ROLE == 'doador' ? opcional(API.historicoVoluntariado()) : Promise.resolve([]),
@@ -151,12 +151,17 @@ async function buscarFeedReal() {
     opcional(API.minhasOngsSeguidas()),
     opcional(API.momentosVistos()),
     ROLE == 'admin' ? Promise.resolve(null) : opcional(API.meuPerfil()),
+    ROLE == 'doador' ? opcional(API.minhasDoacoes()) : Promise.resolve([]),
   ]);
 
   if (!Array.isArray(feed)) throw new Error('Resposta inesperada do servidor.');
 
   const lista = (x) => (Array.isArray(x) ? x : []);
   aplicarFeedReal(feed, lista(curtidas), lista(candidaturas), lista(momentos));
+
+  /* "Seu impacto" (app-shell.js) conta aprovadas em DONATIONS; sem isso ficava sempre em 0 */
+  DONATIONS.length = 0;
+  DONATIONS.push(...lista(doacoes));
 
   FOLLOW.clear();
   lista(seguidas).forEach((x) => FOLLOW.add(Number(x)));
