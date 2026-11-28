@@ -371,12 +371,19 @@ function chatThreadHtml(conv) {
 
   const msgs = CHAT_MSGS[conv.id];
   const rotulo = conv.peer.tipo == 'ONG' ? 'ONG' : 'Doador(a)';
+  const linkPerfil = conv.peer.tipo != 'ONG'
+    ? `#/doador/${esc(conv.peer.id)}`
+    : (ongIdDoUsuario(conv.peer.id) ? `#/ong/${ongIdDoUsuario(conv.peer.id)}` : '');
+  const avatarHtml = linkPerfil
+    ? `<a href="${linkPerfil}" aria-label="Ver perfil de ${esc(conv.peer.nome)}">${chatAvatar(conv.peer, 40)}</a>`
+    : chatAvatar(conv.peer, 40);
+  const nomeHtml = linkPerfil ? `<a href="${linkPerfil}" style="color:inherit;text-decoration:none">${esc(conv.peer.nome)}</a>` : esc(conv.peer.nome);
 
   return `
     <header class="chat-th">
       <a class="chat-ib chat-voltar" href="#/chats" aria-label="Voltar para as conversas">${ic('back')}</a>
-      ${chatAvatar(conv.peer, 40)}
-      <div class="chat-th-t"><h2>${esc(conv.peer.nome)}</h2><small>${rotulo}</small></div>
+      ${avatarHtml}
+      <div class="chat-th-t"><h2>${nomeHtml}</h2><small>${rotulo}</small></div>
       <div class="chat-th-a">
         <button type="button" class="chat-ib" aria-label="Buscar nesta conversa" onclick="chatBcAbrir()">${ic('search')}</button>
         ${chatPrefBtn('fixadas', conv.id)}
@@ -1220,6 +1227,24 @@ async function chatAbrirConversa(peer) {
 }
 
 /* botão "Mensagem" do perfil da ONG (o id recebido é o do perfil da ONG; o chat usa o id do usuário dela) */
+/* userId (USERS.id) -> ongId (ONGS_PROFILES.id) | null, para linkar o cabeçalho do chat quando o peer é ONG */
+const ONG_ID_POR_USUARIO = {};
+
+function ongIdDoUsuario(userId) {
+  if (Object.hasOwn(ONG_ID_POR_USUARIO, userId)) return ONG_ID_POR_USUARIO[userId];
+  if (DEMO) return null;
+  ONG_ID_POR_USUARIO[userId] = null; // evita disparar de novo enquanto a busca está em andamento
+  API.ongIdPorUsuario(userId)
+    .then((r) => {
+      ONG_ID_POR_USUARIO[userId] = r.ong_id || null;
+    })
+    .catch(() => {})
+    .finally(() => {
+      if (location.hash.startsWith('#/chats')) go();
+    });
+  return null;
+}
+
 async function chatAbrirComOng(ongId) {
   if (DEMO) {
     location.hash = '#/chats';
@@ -1241,6 +1266,16 @@ async function chatAbrirComOng(ongId) {
 
   const o = ong(ongId);
   await chatAbrirConversa({ id: String(userId), nome: o?.name || 'ONG', tipo: 'ONG', avatar: o?.logo || '' });
+}
+
+/* botão "Mensagem" do perfil público do doador: aqui o id já é o de USERS, sem tradução nenhuma */
+async function chatAbrirComDoador(userId, nome, avatar) {
+  if (DEMO) {
+    location.hash = '#/chats';
+    return;
+  }
+  if (!temRecurso('chat')) return upsell('chat');
+  await chatAbrirConversa({ id: String(userId), nome: nome || 'Doador(a)', tipo: 'DOADOR', avatar: avatar || '' });
 }
 
 /* ---------- tempo real ---------- */

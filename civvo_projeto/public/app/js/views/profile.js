@@ -46,9 +46,8 @@ const listaItem = (u) => {
       <small style="display:block;color:var(--mut)">${sub}</small>
     </div>`;
   const estilo = 'display:flex;align-items:center;gap:12px;padding:8px 0;color:inherit';
-  return ehOng
-    ? `<a class="fl-it" data-n="${esc(u.nome.toLowerCase())}" href="#/ong/${u.ong_id}" onclick="closeModal()" style="${estilo}">${corpo}</a>`
-    : `<div class="fl-it" data-n="${esc(u.nome.toLowerCase())}" style="${estilo}">${corpo}</div>`;
+  const href = ehOng ? `#/ong/${u.ong_id}` : `#/doador/${u.user_id}`;
+  return `<a class="fl-it" data-n="${esc(u.nome.toLowerCase())}" href="${href}" onclick="closeModal()" style="${estilo}">${corpo}</a>`;
 };
 
 function filtraLista(v) {
@@ -222,7 +221,10 @@ function carregarPerfilOng(id) {
 
   API.perfilOngPublico(id)
     .then((r) => {
-      ONG_PERFIL[id] = { dados: dadosOng(r), ts: Date.now() };
+      const dados = dadosOng(r);
+      /* selo de verificado (como o do Instagram): perfil sem nenhuma pendência */
+      dados.ver = pendenciasOng({ ...r, tipo: 'ONG' }).length === 0;
+      ONG_PERFIL[id] = { dados, ts: Date.now() };
     })
     .catch((e) => {
       console.error('Falha ao carregar o perfil da ONG:', e);
@@ -418,6 +420,19 @@ function profile(name, h, bio, meta, sections, owner, social, cover, avatar, mom
   `;
 }
 
+const itemDoacao = (d, fecharAoClicar) => `
+  <a class="lnk" href="#/recibo/${d.id}" style="color:inherit" ${fecharAoClicar ? 'onclick="closeModal()"' : ''}>
+    <span>${esc(d.ong || d.ong_nome || '')} · ${money(d.valor)}</span>
+    <span class="tag ${d.status == 'PENDENTE' ? 'warn' : (d.status == 'REJEITADO' || d.status == 'EXPIRADO') ? 'bad' : ''}">${d.status}</span>
+  </a>
+`;
+
+function abrirHistoricoDoacoes() {
+  const todas = DONATIONS.slice().sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
+  const linhas = todas.map((d) => itemDoacao(d, true)).join('') || '<p class="emp">Você ainda não fez nenhuma doação.</p>';
+  openModal(`<h3>Histórico de doações</h3>${linhas}`, 'Histórico de doações');
+}
+
 V.perfil = () => {
   if (ROLE == 'ong') return V.ong(meOng().id);
 
@@ -440,14 +455,20 @@ V.perfil = () => {
     `)
     .join('') || '<p class="emp">Você ainda não apoia nenhuma ONG.</p>';
 
-  const doacoesContent = DONATIONS.map((d) => `
-    <a class="lnk" href="#/recibo/${d.id}" style="color:inherit">
-      <span>${esc(d.ong)} · ${money(d.valor)}</span>
-      <span class="tag ${d.status == 'PENDENTE' ? 'warn' : d.status == 'REJEITADO' ? 'bad' : ''}">${d.status}</span>
-    </a>
-  `).join('') || '<p class="emp">Você ainda não fez nenhuma doação.</p>';
+  /* DEMO: campos locais (d.ong, d.data). Modo real: campos vindos do back (d.ong_nome, d.created_at).
+     Em ambos os casos o id cresce com o tempo (Date.now() no demo, auto-incremento no banco),
+     então dá pra ordenar do mais recente pro mais antigo só por ele, sem precisar converter datas. */
+  const LIMITE_HISTORICO = 5;
+  const doacoesOrdenadas = DONATIONS.slice().sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
 
-  /* modo real: o back não guarda causas de interesse nem lista doações do usuário */
+  const doacoesContent = doacoesOrdenadas.length
+    ? doacoesOrdenadas.slice(0, LIMITE_HISTORICO).map((d) => itemDoacao(d, false)).join('') +
+      (doacoesOrdenadas.length > LIMITE_HISTORICO
+        ? `<button type="button" class="btn light sm" style="margin-top:10px" onclick="abrirHistoricoDoacoes()">Ver mais (${doacoesOrdenadas.length - LIMITE_HISTORICO})</button>`
+        : '')
+    : '<p class="emp">Você ainda não fez nenhuma doação.</p>';
+
+  /* visível só para o próprio doador nesta página (#/perfil é sempre a própria conta, nunca a de outra pessoa) */
   const sections = DEMO
     ? [
         ['Causas de interesse', causasContent, 0],
@@ -456,7 +477,7 @@ V.perfil = () => {
       ]
     : [
         ['Causas de interesse', causasContent, 0],
-        ['Histórico de doações', '<p class="emp">O histórico de doações estará disponível em breve.</p>', 0],
+        ['Histórico de doações', doacoesContent, 0],
       ];
 
   sections.push(['', blocoExcluirConta(), 0]);
@@ -567,6 +588,71 @@ function ongTab(o, sec, ps) {
   `;
 }
 
+/* ---- Perfil público do doador (clicável a partir do chat ou da lista de principais doadores) ---- */
+const DOADOR_PERFIL = {}; /* userId -> { dados } | { erro: true } */
+
+function carregarPerfilDoador(userId) {
+  if (DOADOR_PERFIL[userId]) return; // já carregado ou carregando
+  DOADOR_PERFIL[userId] = {};
+  API.perfilDoadorPublico(userId)
+    .then((r) => {
+      DOADOR_PERFIL[userId] = { dados: r };
+    })
+    .catch(() => {
+      DOADOR_PERFIL[userId] = { erro: true };
+    })
+    .finally(() => {
+      if (location.hash.startsWith('#/doador/' + userId)) go();
+    });
+}
+
+V.doador = (idParam) => {
+  const userId = Number(idParam);
+  const cache = DOADOR_PERFIL[userId];
+
+  if (!cache && !DEMO) carregarPerfilDoador(userId);
+
+  if (DEMO || !cache || (!cache.dados && !cache.erro)) {
+    return shell('<div class="card emp">Carregando perfil…</div>', 'buscar', { rightCol: 0 });
+  }
+  if (cache.erro || !cache.dados) {
+    return shell('<div class="card emp">Perfil não encontrado.</div>', 'buscar', { rightCol: 0 });
+  }
+
+  const d = cache.dados;
+  const nome = [d.nome, d.sobrenome].filter(Boolean).join(' ').trim() || 'Doador(a)';
+  const isFollowing = FOLLOW_DOADORES.has(userId);
+
+  const acts = `<div class="acts">
+      <button class="btn light sm" data-fo="${userId}" aria-pressed="${isFollowing}" onclick="seguirDoadorClick(${userId}, this)">${isFollowing ? 'Seguindo' : 'Seguir'}</button>
+      <button class="btn ghost sm" onclick="chatAbrirComDoador(${userId}, '${esc(nome)}', '${esc(imgOk(d.avatar_url) || '')}')">Mensagem</button>
+    </div>`;
+
+  const causasHtml = (d.causas || []).length
+    ? `<div class="chips dk">${d.causas.map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div>`
+    : '<p class="emp">Sem causas de interesse cadastradas.</p>';
+
+  const sections = [['Causas de interesse', causasHtml, 0]];
+
+  return shell(
+    profile(
+      nome,
+      (userId * 70) % 360,
+      [d.cidade, d.estado].filter(Boolean).join(' · ') || d.bio || 'Sem descrição',
+      [],
+      sections,
+      acts,
+      d.redes || {},
+      d.banner_url || '',
+      d.avatar_url || '',
+      null,
+      d.banner_cor || ''
+    ),
+    'buscar',
+    { rightCol: 0 }
+  );
+};
+
 V.ong = (id, sec = 'publicacoes') => {
   const o = ong(id);
   if (!o) {
@@ -592,7 +678,7 @@ V.ong = (id, sec = 'publicacoes') => {
     ? `<div class="acts"><a class="btn ghost sm" href="#/editar-perfil">${lc('pencil', 16)} Editar perfil</a></div>${!DEMO && ROLE == 'ong' ? pendCard() : ''}`
     : `<div class="acts">
          <a class="btn sm" href="${op ? '#/doar/' + op.id : '#'}" ${op ? '' : 'aria-disabled="true"'}>Doar</a>
-         <button class="btn light sm" data-fo="${o.id}" ${EB()} aria-pressed="${f}" onclick="toggleSet(FOLLOW, ${o.id})">${f ? 'Seguindo' : 'Seguir'}</button>
+         <button class="btn light sm" data-fo="${o.id}" aria-pressed="${f}" onclick="toggleSet(FOLLOW, ${o.id})">${f ? 'Seguindo' : 'Seguir'}</button>
          <button class="btn ghost sm" ${EB()} data-on="Candidatura enviada" data-off="Quero ser voluntário" aria-pressed="${v}" onclick="volunteer(${o.id}, null, this)">${v ? 'Candidatura enviada' : 'Quero ser voluntário'}</button>
          <button class="btn ghost sm" onclick="chatAbrirComOng(${o.id})">Mensagem</button>
        </div>`;

@@ -752,7 +752,10 @@ async function saveProfileReal(btn) {
   const ok = await comEspera(btn, 'Salvando…', async () => {
     try {
       const r = await API.atualizarMeuPerfil(d);
-      if (r && r.perfil) aplicarMeuPerfil(r.perfil);
+      /* GET /perfil/me devolve o perfil "cru" (sem envelope); aceita os dois formatos aqui também,
+         senão o Pix (e o resto) salva certinho no banco mas não atualiza na tela até recarregar tudo */
+      const perfilAtualizado = r && r.perfil ? r.perfil : r;
+      if (perfilAtualizado && perfilAtualizado.tipo) aplicarMeuPerfil(perfilAtualizado);
     } catch (err) {
       e.textContent = err.name == 'ApiError' && err.message ? err.message : 'Não foi possível salvar. Tente de novo.';
       throw err;

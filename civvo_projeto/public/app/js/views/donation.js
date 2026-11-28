@@ -117,14 +117,8 @@ function pixBoxHtml() {
   if (!dest) return '';
 
   const minhas = pixDoDoador();
-  if (!DON.pixSel) DON.pixSel = minhas.length ? String(minhas[0].id) : '__outra';
-  const outra = DON.pixSel == '__outra';
 
-  const opcoes = minhas
-    .map((x) => `<option value="${x.id}" ${String(x.id) == DON.pixSel ? 'selected' : ''}>${esc(x.tipo)}: ${esc(pixMascara(x.chave, x.tipo))}</option>`)
-    .join('');
-
-  return `
+  const destinoHtml = `
     <label style="margin-top:14px">Pix da ONG (destino)</label>
     <div class="pxd" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid rgba(127,127,127,.3);border-radius:10px">
       <div style="min-width:0">
@@ -132,20 +126,45 @@ function pixBoxHtml() {
         <small style="display:block;color:var(--mut)">${esc(dest.tipo)} · ${esc(o.name)}</small>
       </div>
       <button type="button" class="btn light sm" data-k="${esc(dest.chave)}" onclick="copiarPix(this)">Copiar</button>
-    </div>
-    <label for="pxO">Seu Pix (remetente)</label>
-    <select id="pxO" class="in" onchange="setPixOrigem(this.value)">
-      ${opcoes}
-      <option value="__outra" ${outra ? 'selected' : ''}>Informar outra chave</option>
-    </select>
-    <input id="pxOut" class="in" style="margin-top:8px" ${outra ? '' : 'hidden'} autocomplete="off" placeholder="CPF, CNPJ, e-mail, celular ou chave aleatória" value="${esc(DON.pixOut || '')}" oninput="DON.pixOut=this.value">
-    <small style="color:var(--mut)">Pague pelo app do seu banco para a chave da ONG, a partir da chave remetente acima. Assim a doação é identificada.</small>`;
+    </div>`;
+
+  /* já tem chave cadastrada em Configurações e não escolheu digitar outra: mostra pronta, sem pedir de novo
+     e sem um seletor que só teria uma opção pra escolher (feio e redundante) */
+  if (minhas.length && DON.pixSel != '__outra') {
+    const chave = minhas[0];
+    DON.pixSel = String(chave.id);
+    return `${destinoHtml}
+      <label style="margin-top:14px">Sua chave Pix (de onde você vai enviar)</label>
+      <div class="pxd" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid rgba(127,127,127,.3);border-radius:10px">
+        <div style="min-width:0">
+          <b style="word-break:break-all">${esc(pixMascara(chave.chave, chave.tipo))}</b>
+          <small style="display:block;color:var(--mut)">${esc(chave.tipo)} · cadastrada em Configurações</small>
+        </div>
+        <button type="button" class="btn light sm" onclick="usarOutraPix()">Usar outra</button>
+      </div>
+      <small style="color:var(--mut)">Ninguém vai te doar por aqui — é só pra identificar que o Pix que a ONG vai receber é seu.</small>`;
+  }
+
+  /* sem chave cadastrada (ou escolheu digitar outra): um único campo de texto, sem seletor */
+  return `${destinoHtml}
+    <label for="pxOut" style="margin-top:14px">Sua chave Pix (de onde você vai enviar)</label>
+    <input id="pxOut" class="in" autocomplete="off" placeholder="CPF, CNPJ, e-mail, celular ou chave aleatória" value="${esc(DON.pixOut || '')}" oninput="DON.pixOut=this.value">
+    ${minhas.length ? `<button type="button" class="btn light sm" style="margin-top:8px" onclick="usarMinhaPix()">Usar a chave cadastrada em Configurações</button>` : ''}
+    <small style="color:var(--mut)">Ninguém vai te doar por aqui — é só pra identificar que o Pix que a ONG vai receber é seu.</small>`;
 }
 
-function setPixOrigem(v) {
-  DON.pixSel = v;
-  const i = $('#pxOut');
-  if (i) i.hidden = v != '__outra';
+/* alterna entre a chave já cadastrada e a digitação manual, sem select nem campo escondido */
+function usarOutraPix() {
+  DON.pixSel = '__outra';
+  DON.pixOut = '';
+  const box = $('#pixBox');
+  if (box) box.innerHTML = pixBoxHtml();
+}
+
+function usarMinhaPix() {
+  DON.pixSel = '';
+  const box = $('#pixBox');
+  if (box) box.innerHTML = pixBoxHtml();
 }
 
 async function copiarPix(btn) {

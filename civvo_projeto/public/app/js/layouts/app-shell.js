@@ -163,17 +163,62 @@ function shell(inner, on, { rightCol = 1, wide = 0 } = {}) {
   `;
 }
 
-function sugest() {
-  const ok = DONATIONS.filter((d) => d.status == 'APROVADO').length;
+/* top 5 doadores da ONG logada: null = ainda não carregou, [] = carregou e está vazio */
+let TOP_DOADORES = null;
+let TOP_DOADORES_PROMISE = null;
+const FOLLOW_DOADORES = new Set();
 
+function carregarTopDoadores() {
+  if (TOP_DOADORES_PROMISE) return TOP_DOADORES_PROMISE;
+  TOP_DOADORES_PROMISE = API.principaisDoadoresOng()
+    .then((lista) => {
+      TOP_DOADORES = lista;
+    })
+    .catch(() => {
+      TOP_DOADORES = [];
+    })
+    .finally(() => {
+      go();
+    });
+  return TOP_DOADORES_PROMISE;
+}
+
+function topDoadorHtml(d) {
+  const isFollowing = FOLLOW_DOADORES.has(d.user_id);
+  const nome = d.nome || 'Doador(a)';
+  return `
+    <div class="sg">
+      <a href="#/doador/${d.user_id}" aria-label="Ver perfil de ${esc(nome)}">${av(nome, (d.user_id * 70) % 360, 38, imgOk(d.avatar_url))}</a>
+      <div>
+        <a href="#/doador/${d.user_id}" style="color:inherit;text-decoration:none">${esc(nome)}</a>
+        <small>${d.total_doacoes} ${d.total_doacoes == 1 ? 'doação' : 'doações'}</small>
+      </div>
+      <button class="btn light sm ${isFollowing ? 'following' : ''}" data-fo="${d.user_id}" aria-pressed="${isFollowing}" onclick="seguirDoadorClick(${d.user_id}, this)">
+        ${isFollowing ? 'Seguindo' : 'Seguir'}
+      </button>
+    </div>
+  `;
+}
+
+async function seguirDoadorClick(userId, btn) {
+  const seguindo = FOLLOW_DOADORES.has(userId);
+  const ok = await comEspera(btn, seguindo ? 'Deixando de seguir…' : 'Seguindo…', () =>
+    seguindo ? API.deixarDeSeguirDoador(userId) : API.seguirDoador(userId)
+  );
+  if (!ok) return;
+  seguindo ? FOLLOW_DOADORES.delete(userId) : FOLLOW_DOADORES.add(userId);
+  go();
+}
+
+function sugest() {
   const ongsList = ONGS.filter((o) => o.id != ME_ONG).slice(0, 3)
     .map((o) => {
       const isFollowing = FOLLOW.has(o.id);
       return `
         <div class="sg">
-          ${av(o.name, o.h, 38)}
+          <a href="#/ong/${o.id}" aria-label="Ver perfil de ${esc(o.name)}">${av(o.name, o.h, 38)}</a>
           <div>
-            ${esc(o.name)}
+            <a href="#/ong/${o.id}" style="color:inherit;text-decoration:none">${esc(o.name)}</a>
             <small>${esc(o.cat)}</small>
           </div>
           <button class="btn light sm ${isFollowing ? 'following' : ''}" data-fo="${o.id}" aria-pressed="${isFollowing}" onclick="seguirOngClick(${o.id}, this)">
@@ -184,16 +229,29 @@ function sugest() {
     })
     .join('') || '<p style="color:var(--mut)">Nenhuma sugestão por enquanto.</p>';
 
+  /* ONG não doa: "Seu impacto" não faz sentido pra ela. Mostra os 5 maiores doadores no lugar. */
+  let segundoCard;
+  if (ROLE == 'ong') {
+    if (TOP_DOADORES === null && !DEMO) carregarTopDoadores();
+    const lista = TOP_DOADORES || [];
+    const corpo = lista.length
+      ? lista.map(topDoadorHtml).join('')
+      : '<p style="color:var(--mut)">Ainda sem doações. Assim que alguém doar para sua ONG, os maiores doadores aparecem aqui.</p>';
+    segundoCard = `<div class="card sug"><h4>Doadores mais influentes</h4>${corpo}</div>`;
+  } else {
+    segundoCard = `<div class="card sug">
+         <h4>Seu impacto</h4>
+         <b style="font-size:26px">${DONATIONS.filter((d) => d.status == 'APROVADO').length}</b>
+         <span style="color:var(--mut)">doações aprovadas</span>
+       </div>`;
+  }
+
   return `
     <div class="card sug">
       <h4>ONGs para você</h4>
       ${ongsList}
     </div>
-    <div class="card sug">
-      <h4>Seu impacto</h4>
-      <b style="font-size:26px">${ok}</b> 
-      <span style="color:var(--mut)">doações aprovadas</span>
-    </div>
+    ${segundoCard}
   `;
 }
 

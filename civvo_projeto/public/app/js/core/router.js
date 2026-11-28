@@ -38,6 +38,14 @@ function go(nav) {
   }
 }
 
+/* {rota, id} da página atual: usado para saber se uma troca de hash é uma página nova de verdade
+   (vai pro topo) ou só a troca de uma aba/seção dentro da mesma página (mantém o scroll onde estava,
+   ex: Publicações -> Sobre -> Ações sociais no perfil da ONG). */
+let ULTIMA_PAGINA = (() => {
+  const [r, a] = (location.hash.slice(2) || 'feed').split('/');
+  return { r, a };
+})();
+
 addEventListener('hashchange', () => {
 
   if (window.__civvoPublico) {
@@ -46,7 +54,12 @@ addEventListener('hashchange', () => {
 
   closeModal();
   closeViewer();
-  go(true);
+
+  const [r, a] = (location.hash.slice(2) || 'feed').split('/');
+  const mesmaPagina = ULTIMA_PAGINA.r == r && ULTIMA_PAGINA.a == a;
+  ULTIMA_PAGINA = { r, a };
+
+  go(!mesmaPagina);
   announce(document.title);
   focusTop();
 });

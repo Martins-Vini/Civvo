@@ -1,5 +1,3 @@
-
-
 const ROTAS_APP = new Set([
   'feed',
   'buscar',
@@ -15,6 +13,7 @@ const ROTAS_APP = new Set([
   'post',
   'editar-perfil',
   'ong',
+  'doador',
 ]);
 
 let TEMA = 'claro';

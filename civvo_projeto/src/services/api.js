@@ -129,6 +129,9 @@ export const listarSeguindo = (userId) => doGet(`/followers/${id(userId)}/follow
 export const toggleSeguirOng = (ongId) => doEnvio('POST', '/followers/toggle', { ongId });
 /* ids das ONGs que eu sigo */
 export const minhasOngsSeguidas = () => doGet('/followers/me/ongs');
+/* seguir/deixar de seguir um doador direto pelo USERS.id dele (rota genérica, diferente da de ONG) */
+export const seguirDoador = (userId) => doEnvio('POST', '/followers', { followingId: userId });
+export const deixarDeSeguirDoador = (userId) => doEnvio('DELETE', `/followers/${id(userId)}`);
 export const contagensOng = (ongId) => doGet(`/followers/ong/${id(ongId)}/contagens`);
 /* tipo: 'seguidores' | 'seguindo' */
 export const listaOng = (ongId, tipo) => doGet(`/followers/ong/${id(ongId)}/${id(tipo)}`);
@@ -163,11 +166,14 @@ export const excluirContaOng = () => doEnvio('DELETE', '/ong/account');
 
 /* ---- ONG ---- */
 export const perfilOng = () => doGet('/ong/perfil');
+export const principaisDoadoresOng = () => doGet('/ong/principais-doadores').then((r) => r.doadores || []);
 
 /* ---- Perfil completo e editável (ONG e doador) ---- */
 export const meuPerfil = () => doGet('/perfil/me');
 export const atualizarMeuPerfil = (payload) => doEnvio('PUT', '/perfil/me', payload);
 export const perfilOngPublico = (ongId) => doGet(`/perfil/ong/${id(ongId)}`);
+export const perfilDoadorPublico = (userId) => doGet(`/perfil/doador/${id(userId)}`);
+export const ongIdPorUsuario = (userId) => doGet(`/perfil/ong-por-usuario/${id(userId)}`);
 /* FormData: image + tipo ('avatar' | 'banner') */
 export const enviarImagemPerfil = (formData) => doEnvio('POST', '/perfil/imagem', formData);
 
